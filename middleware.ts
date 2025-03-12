@@ -74,6 +74,10 @@ export async function middleware(request: NextRequest) {
     // Handle authentication
     if (isProtectedRoute) {
       if (!session) {
+        // Special handling for admin routes - redirect to admin login
+        if (request.nextUrl.pathname.startsWith("/admin")) {
+          return NextResponse.redirect(new URL("/admin-login", request.url))
+        }
         return NextResponse.redirect(new URL("/login", request.url))
       }
 

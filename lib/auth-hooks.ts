@@ -29,44 +29,57 @@ export function useAuth() {
   }
 
   // Custom sign-up function that creates a user in Supabase and then signs in with NextAuth
-  const register = async (email: string, password: string, userData: any) => {
+  const register = async (email: string, phone: string, userData: any) => {
     try {
-      // First create the user in Supabase
+      // Check if phone or email already exists before creating auth user
       const supabase = createClientBrowser()
+      const { data: existingUser } = await supabase
+        .from("profiles")
+        .select("phone, email")
+        .or(`phone.eq.${phone},email.eq.${email}`)
+        .maybeSingle()
+
+      if (existingUser) {
+        const field = existingUser.phone === phone ? "phone number" : "email"
+        return { success: false, error: `This ${field} is already registered` }
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
-        password,
+        password: phone, // Use phone as password
         options: {
           data: userData,
         },
       })
 
       if (error) {
+        console.error("Auth error:", error)
         return { success: false, error: error.message }
       }
 
       // Create profile in the profiles table
       if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert({
-          id: data.user.id,
-          email: email,
-          full_name: userData.full_name,
-          phone: userData.phone,
-          ...userData,
-        })
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            id: data.user.id,
+            email: email,
+            full_name: userData.full_name,
+            phone: phone,
+            ...userData,
+          })
 
         if (profileError) {
           console.error("Profile creation error:", profileError)
+          if (profileError.code === '23505') { // Unique constraint violation
+            return { success: false, error: "This phone number or email is already registered" }
+          }
           return { success: false, error: profileError.message }
         }
         
-        // Now sign in with NextAuth
-        const loginResult = await login(email, password)
-        
         return { 
-          ...loginResult,
-          userId: data.user.id, // Include the userId in the response
-          success: loginResult.success
+          success: true, 
+          userId: data.user.id 
         }
       }
 

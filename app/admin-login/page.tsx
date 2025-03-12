@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { signIn } from "next-auth/react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -10,7 +11,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Loader2, Shield } from "lucide-react"
-import { createClientBrowser } from "@/lib/supabase"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -25,31 +25,16 @@ export default function AdminLoginPage() {
     setError(null)
 
     try {
-      const supabase = createClientBrowser()
-
-      // Sign in with email and password
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const result = await signIn("credentials", {
+        identifier: email,
+        password: password,
+        loginMethod: "email",
+        callbackUrl: "/admin/dashboard",
+        redirect: false,
       })
 
-      if (authError) {
-        throw authError
-      }
-
-      // Check if user is an admin
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single()
-
-      if (profileError || !profile) {
-        throw new Error("User profile not found")
-      }
-
-      if (profile.role !== "admin") {
-        throw new Error("Unauthorized: Admin access only")
+      if (result?.error) {
+        throw new Error("Invalid credentials")
       }
 
       router.push("/admin/dashboard")

@@ -36,6 +36,11 @@ CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE 
   USING (auth.uid() = id);
 
+-- Policy for users to insert their own profile
+CREATE POLICY "Users can insert their own profile"
+  ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
 -- Policy for admins to view all profiles
 CREATE POLICY "Admins can view all profiles" 
   ON profiles FOR SELECT 
@@ -62,6 +67,14 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Check if a profile already exists for this user
   IF EXISTS (SELECT 1 FROM public.profiles WHERE id = new.id) THEN
+    -- Update the existing profile with any new metadata
+    UPDATE public.profiles 
+    SET 
+      email = COALESCE(new.email, profiles.email),
+      full_name = COALESCE(new.raw_user_meta_data->>'full_name', profiles.full_name),
+      phone = COALESCE(new.raw_user_meta_data->>'phone', profiles.phone),
+      updated_at = NOW()
+    WHERE id = new.id;
     RETURN new;
   END IF;
   

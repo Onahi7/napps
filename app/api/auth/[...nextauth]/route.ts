@@ -42,14 +42,14 @@ export const authOptions: NextAuthOptions = {
             if (!userByPhone?.email) {
               return null
             }
-            
+
             // Then sign in with the email and phone as password
             authResult = await supabase.auth.signInWithPassword({
               email: userByPhone.email,
               password: credentials.password, // This should be the phone number
             })
           }
-          
+
           const { data, error } = authResult
           
           if (error || !data.user) {
