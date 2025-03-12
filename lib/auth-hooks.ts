@@ -31,8 +31,9 @@ export function useAuth() {
   // Custom sign-up function that creates a user in Supabase and then signs in with NextAuth
   const register = async (email: string, phone: string, userData: any) => {
     try {
-      // Check if phone or email already exists before creating auth user
       const supabase = createClientBrowser()
+
+      // Check for existing phone or email
       const { data: existingUser } = await supabase
         .from("profiles")
         .select("phone, email")
@@ -40,8 +41,13 @@ export function useAuth() {
         .maybeSingle()
 
       if (existingUser) {
-        const field = existingUser.phone === phone ? "phone number" : "email"
-        return { success: false, error: `This ${field} is already registered` }
+        if (existingUser.phone === phone) {
+          return { success: false, error: "This phone number is already registered" }
+        }
+        if (existingUser.email === email) {
+          return { success: false, error: "This email is already registered" }
+        }
+        return { success: false, error: "This email or phone number is already registered" }
       }
 
       const { data, error } = await supabase.auth.signUp({
@@ -54,6 +60,9 @@ export function useAuth() {
 
       if (error) {
         console.error("Auth error:", error)
+        if (error.message.includes("unique")) {
+          return { success: false, error: "This email or phone number is already registered" }
+        }
         return { success: false, error: error.message }
       }
 
@@ -72,7 +81,7 @@ export function useAuth() {
         if (profileError) {
           console.error("Profile creation error:", profileError)
           if (profileError.code === '23505') { // Unique constraint violation
-            return { success: false, error: "This phone number or email is already registered" }
+            return { success: false, error: "This email or phone number is already registered" }
           }
           return { success: false, error: profileError.message }
         }

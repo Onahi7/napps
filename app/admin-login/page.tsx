@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Loader2, Shield } from "lucide-react"
+import { createClientBrowser } from "@/lib/supabase"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -25,11 +26,22 @@ export default function AdminLoginPage() {
     setError(null)
 
     try {
+      // First check if the email belongs to an admin
+      const supabase = createClientBrowser()
+      const { data: adminProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("email", email)
+        .single()
+
+      if (!adminProfile || adminProfile.role !== "admin") {
+        throw new Error("Invalid admin credentials")
+      }
+
       const result = await signIn("credentials", {
         identifier: email,
         password: password,
         loginMethod: "email",
-        callbackUrl: "/admin/dashboard",
         redirect: false,
       })
 
@@ -71,7 +83,14 @@ export default function AdminLoginPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  required 
+                  className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                />
               </div>
 
               <div className="space-y-2">
@@ -82,11 +101,16 @@ export default function AdminLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="border-napps-gold/30 focus-visible:ring-napps-gold"
                 />
               </div>
             </CardContent>
             <CardFooter>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                className="w-full bg-napps-gold text-black hover:bg-napps-gold/90 shadow-gold" 
+                disabled={isLoading}
+              >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

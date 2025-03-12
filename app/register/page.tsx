@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth-hooks"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { getNigeriaStates } from "@/lib/nigeria-data"
+import { initializeRegistrationPayment } from "@/actions/payment-actions"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -53,57 +54,18 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      // Validate form data
+      // Basic validation
       if (!formData.full_name || !formData.phone || !formData.email) {
         setError("Personal information fields are required")
-        setIsLoading(false)
-        return
-      }
-
-      if (!formData.email.includes("@")) {
-        setError("Please enter a valid email address")
-        setIsLoading(false)
         return
       }
 
       if (!formData.school_name || !formData.school_address || !formData.school_state) {
         setError("School information fields are required")
-        setIsLoading(false)
         return
       }
 
-      // Check if email or phone already exists
-      const supabase = createClientBrowser()
-      
-      // Check for duplicate email
-      const { data: existingEmail } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", formData.email)
-        .maybeSingle()
-
-      if (existingEmail) {
-        setError("Email already registered")
-        setIsLoading(false)
-        return
-      }
-
-      // Check for duplicate phone
-      const { data: existingPhone } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("phone", formData.phone)
-        .maybeSingle()
-
-      if (existingPhone) {
-        setError("Phone number already registered")
-        setIsLoading(false)
-        return
-      }
-
-      // Register user with NextAuth and Supabase
-      const registrationAmount = 25000 // ₦25,000 registration fee
-      
+      // Register user
       const result = await register(
         formData.email,
         formData.phone,
@@ -122,47 +84,15 @@ export default function RegisterPage() {
       )
 
       if (!result.success) {
-        setError(result.error || "Registration failed")
-        setIsLoading(false)
+        setError(result.error)
         return
       }
 
-      // Initialize payment with Paystack
-      type PaymentResponse = {
-        success: boolean
-        authorizationUrl?: string
-        message?: string
-      }
-
-      const response = await fetch('/api/payments/initialize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          amount: registrationAmount * 100,
-          metadata: {
-            userId: (result as { userId: string }).userId,
-            name: formData.full_name,
-            phone: formData.phone,
-            school: formData.school_name
-          }
-        }),
-      })
-
-      const paymentResponse = (await response.json()) as PaymentResponse
-
-      if (paymentResponse.success && paymentResponse.authorizationUrl) {
-        // Redirect to payment page
-        window.location.href = paymentResponse.authorizationUrl
-      } else {
-        setError(paymentResponse.message || "Payment initialization failed")
-        setIsLoading(false)
-      }
-    } catch (err: any) {
-      console.error("Registration error:", err)
-      setError(err.message || "An error occurred during registration")
+      // Redirect to success page
+      router.push(`/registration-success?userId=${result.userId}`)
+    } catch (error: any) {
+      setError(error.message || "Registration failed")
+    } finally {
       setIsLoading(false)
     }
   }

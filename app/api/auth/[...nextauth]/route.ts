@@ -17,12 +17,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Create Supabase client - need to await it since it returns a Promise
           const supabase = await createClientServer()
           const isEmailLogin = credentials.loginMethod === "email"
           
-          // For email login, we use the provided password
-          // For phone login, we use the phone number itself as the password
           let authResult;
           
           if (isEmailLogin) {
@@ -77,6 +74,8 @@ export const authOptions: NextAuthOptions = {
             state: profile.school_state,
             school_name: profile.school_name,
             school_address: profile.school_address,
+            school_city: profile.school_city,
+            school_type: profile.school_type,
             napps_position: profile.napps_position,
             napps_chapter: profile.napps_chapter,
             role: profile.role,

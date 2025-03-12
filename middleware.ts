@@ -76,6 +76,10 @@ export async function middleware(request: NextRequest) {
       if (!session) {
         // Special handling for admin routes - redirect to admin login
         if (request.nextUrl.pathname.startsWith("/admin")) {
+          // Don't redirect if already on admin-login page
+          if (request.nextUrl.pathname === "/admin-login") {
+            return response
+          }
           return NextResponse.redirect(new URL("/admin-login", request.url))
         }
         return NextResponse.redirect(new URL("/login", request.url))
@@ -103,8 +107,8 @@ export async function middleware(request: NextRequest) {
     }
 
     // Handle authentication routes when already logged in
-    const authRoutes = ["/login", "/register", "/pre-register"]
-    if (authRoutes.includes(request.nextUrl.pathname) && session) {
+    const publicRoutes = ["/login", "/register", "/pre-register"]
+    if (publicRoutes.includes(request.nextUrl.pathname) && session) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -124,10 +128,7 @@ export async function middleware(request: NextRequest) {
 
     return response
   } catch (error) {
-    // Log error in production without exposing details
     console.error("Middleware error:", error)
-    
-    // Return graceful error response
     return new NextResponse(
       JSON.stringify({
         success: false,
@@ -145,13 +146,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 }
