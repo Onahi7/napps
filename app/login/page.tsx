@@ -1,5 +1,4 @@
 "use client"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -44,8 +43,13 @@ export default function LoginPage() {
         return
       }
 
-      // Redirect will be handled by middleware based on user role
-      router.push("/participant/dashboard")
+      // Determine redirect based on admin status
+      if (isAdminLogin) {
+        router.push("/admin/dashboard")
+      } else {
+        router.push("/participant/dashboard")
+      }
+      
       router.refresh()
     } catch (err: any) {
       console.error("Login error:", err)
@@ -65,7 +69,6 @@ export default function LoginPage() {
           <span className="font-semibold text-napps-green">NAPPS Conference</span>
         </Link>
       </div>
-
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
         <div className="flex flex-col space-y-2 text-center">
           <Icons.logo className="mx-auto h-12 w-12 text-napps-gold" />

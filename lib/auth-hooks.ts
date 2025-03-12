@@ -35,12 +35,18 @@ export function useAuth() {
     try {
       const supabase = createClientBrowser()
 
-      // Check for existing phone or email
-      const { data: existingUser } = await supabase
+      // Properly format the phone number for SQL query to avoid injection risks
+      // Check for existing phone or email with better SQL injection protection
+      const { data: existingUser, error: queryError } = await supabase
         .from("profiles")
         .select("phone, email")
-        .or(`phone.eq.${phone},email.eq.${email}`)
+        .or(`phone.eq."${phone}",email.eq."${email}"`)
         .maybeSingle()
+
+      if (queryError) {
+        console.error("Error checking existing user:", queryError)
+        return { success: false, error: "Error checking user existence" }
+      }
 
       if (existingUser) {
         if (existingUser.phone === phone) {
@@ -55,6 +61,8 @@ export function useAuth() {
       // For regular users, we create a random password - user will login passwordless
       const randomPassword = Math.random().toString(36).slice(-10);
       
+      console.log("Creating new user with email:", email)
+
       // Create the auth user
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -63,8 +71,8 @@ export function useAuth() {
           data: {
             phone,
             full_name: userData.full_name,
-            ...userData,
           },
+          emailRedirectTo: `${window.location.origin}/login`,
         },
       })
 
@@ -73,33 +81,48 @@ export function useAuth() {
         return { success: false, error: error.message }
       }
 
-      // Create profile in the profiles table
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert({
-            id: data.user.id,
-            email: email,
-            full_name: userData.full_name,
-            phone: phone,
-            ...userData,
-          })
-
-        if (profileError) {
-          console.error("Profile creation error:", profileError)
-          if (profileError.code === '23505') { // Unique constraint violation
-            return { success: false, error: "This email or phone number is already registered" }
-          }
-          return { success: false, error: profileError.message }
-        }
-        
-        return { 
-          success: true, 
-          userId: data.user.id 
-        }
+      if (!data.user || !data.user.id) {
+        console.error("User creation failed - no user data returned")
+        return { success: false, error: "Failed to create user account" }
       }
 
-      return { success: false, error: "User creation failed" }
+      console.log("Auth user created successfully with ID:", data.user.id)
+
+      // Create profile in the profiles table
+      const profileData = {
+        id: data.user.id,
+        email: email,
+        full_name: userData.full_name,
+        phone: phone,
+        role: "participant",
+        payment_status: "pending",
+        ...userData
+      }
+
+      console.log("Inserting profile data:", profileData)
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert(profileData)
+
+      if (profileError) {
+        console.error("Profile creation error:", profileError)
+        
+        // Try to clean up the auth user if profile creation fails
+        await supabase.auth.admin.deleteUser(data.user.id)
+        
+        if (profileError.code === '23505') { // Unique constraint violation
+          return { success: false, error: "This email or phone number is already registered" }
+        }
+        return { success: false, error: profileError.message }
+      }
+      
+      console.log("Profile created successfully")
+      
+      return { 
+        success: true, 
+        userId: data.user.id 
+      }
     } catch (error: any) {
       console.error("Registration error:", error)
       return { success: false, error: error.message || "Registration failed" }

@@ -55,74 +55,60 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Refresh session if expired
+    // Get current session
     const { data: { session } } = await supabase.auth.getSession()
     
     const path = request.nextUrl.pathname
     
-    // Define route groups for cleaner access control
+    // Define route categories
     const isAdminRoute = path.startsWith("/admin")
     const isValidatorRoute = path.startsWith("/validator")
-    const isParticipantRoute = path.startsWith("/participant")
-    const isPaymentRoute = path.startsWith("/payment") || path.startsWith("/profile")
-    const isAuthRoute = path === "/login" || path === "/register" || path === "/pre-register" || path === "/admin-login"
+    const isProtectedRoute = path.startsWith("/participant") || 
+                             path.startsWith("/payment") ||
+                             path.startsWith("/profile")
+    const isPublicRoute = path === "/" || 
+                          path === "/login" || 
+                          path === "/register" || 
+                          path === "/pre-register" || 
+                          path === "/admin-login" ||
+                          path.match(/\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/) ||
+                          path.startsWith("/_next") || 
+                          path.startsWith("/favicon.ico")
     
     // Skip middleware for public assets
-    if (
-      path.startsWith("/_next") || 
-      path.startsWith("/favicon.ico") ||
-      path.match(/\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/)
-    ) {
+    if (path.startsWith("/_next") || path.startsWith("/favicon.ico") || path.match(/\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/)) {
       return response
     }
     
-    // If user is already logged in and trying to access auth routes, redirect to appropriate dashboard
-    if (session && isAuthRoute) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single()
-
-      const role = profile?.role || "participant"
-      
-      // Redirect based on user role
-      if (role === "admin") {
-        return NextResponse.redirect(new URL("/admin/dashboard", request.url))
-      } else if (role === "validator") {
-        return NextResponse.redirect(new URL("/validator/dashboard", request.url))
-      } else {
-        return NextResponse.redirect(new URL("/participant/dashboard", request.url))
-      }
-    }
-    
-    // Handle protected routes access
+    // Simplified authentication logic
     if (!session) {
-      // Not logged in, trying to access protected routes
+      // Not logged in, allow access only to public routes
       if (isAdminRoute) {
-        // Special case for admin routes
         return NextResponse.redirect(new URL("/admin-login", request.url))
-      } else if (isValidatorRoute || isParticipantRoute || isPaymentRoute) {
-        // Other protected routes
+      } else if (isValidatorRoute || isProtectedRoute) {
         return NextResponse.redirect(new URL("/login", request.url))
       }
     } else {
-      // Logged in, check role-based access
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single()
+      // Logged in
+      // Check role only for admin and validator routes
+      if (isAdminRoute || isValidatorRoute) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single()
         
-      const role = profile?.role || "participant"
-      
-      // Role-based access control with simpler logic
-      if (isAdminRoute && role !== "admin") {
-        return NextResponse.redirect(new URL("/participant/dashboard", request.url))
-      }
-      
-      if (isValidatorRoute && role !== "validator" && role !== "admin") {
-        return NextResponse.redirect(new URL("/participant/dashboard", request.url))
+        const role = profile?.role || "participant"
+        
+        // Admin routes require admin role
+        if (isAdminRoute && role !== "admin") {
+          return NextResponse.redirect(new URL("/participant/dashboard", request.url))
+        }
+        
+        // Validator routes require validator or admin role
+        if (isValidatorRoute && role !== "validator" && role !== "admin") {
+          return NextResponse.redirect(new URL("/participant/dashboard", request.url))
+        }
       }
     }
     

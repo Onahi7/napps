@@ -51,9 +51,14 @@ export const authOptions: NextAuthOptions = {
           // Get user profile to check role
           const { data: profileCheck } = await supabase
             .from("profiles")
-            .select("role")
+            .select("role, id")
             .eq("email", email)
             .single()
+            
+          if (!profileCheck) {
+            console.error("No profile found for email:", email)
+            return null
+          }
             
           // For admin user, require password authentication
           if (profileCheck?.role === 'admin') {
@@ -85,29 +90,21 @@ export const authOptions: NextAuthOptions = {
           } 
           // For regular users - passwordless login
           else {
-            // Get user by email for regular user
-            const { data: userByEmail } = await supabase
+            // Get full profile details by profile ID
+            const { data: profile } = await supabase
               .from("profiles")
               .select("*")
-              .eq("email", email)
+              .eq("id", profileCheck.id)
               .single()
               
-            if (!userByEmail) {
+            if (!profile) {
+              console.error("No profile details found for ID:", profileCheck.id)
               return null
             }
             
-            // Get auth user id
-            const { data: authUser } = await supabase
-              .from("users")
-              .select("id")
-              .eq("email", email)
-              .single()
-              
-            if (!authUser?.id) {
-              return null
-            }
-            
-            return createUserObject(authUser.id, userByEmail)
+            // For regular users, we simply authenticate based on their profile existence
+            // This is passwordless authentication
+            return createUserObject(profile.id, profile)
           }
         } catch (error) {
           console.error("Auth error:", error)
@@ -145,7 +142,7 @@ function createUserObject(id: string, profile: any): User {
     email: profile.email,
     phone: profile.phone,
     full_name: profile.full_name,
-    state: profile.school_state,
+    state: profile.school_state || profile.state,
     school_name: profile.school_name,
     school_address: profile.school_address,
     school_city: profile.school_city,
@@ -153,10 +150,10 @@ function createUserObject(id: string, profile: any): User {
     napps_position: profile.napps_position,
     napps_chapter: profile.napps_chapter,
     role: profile.role,
-    payment_status: profile.payment_status,
+    payment_status: profile.payment_status || "pending",
     lga: profile.lga || "",
     chapter: profile.napps_chapter || "",
-    organization: profile.school_name || ""
+    organization: profile.school_name || profile.organization || ""
   } as User
 }
 
