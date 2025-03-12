@@ -26,13 +26,14 @@ export async function initializeRegistrationPayment() {
     return { success: false, error: "You have already paid for this conference" }
   }
 
-  // Get registration amount from config
+  // Get registration amount and split code from config
   const registrationAmount = await getServerConfig<number>("registrationAmount", 15000)
+  const splitCode = await getServerConfig<string | null>("payment_split_code", null)
 
   try {
-    // Create payment
+    // Create payment with split configuration
     const payment = await initiatePayment({
-      email: profile.email, // Use the email saved in the database
+      email: profile.email || `${profile.phone}@napps.org`, // Fallback to generated email if null
       amount: registrationAmount * 100, // Paystack requires amount in kobo
       metadata: {
         user_id: user.id,
@@ -40,6 +41,7 @@ export async function initializeRegistrationPayment() {
         payment_type: "registration",
       },
       callback_url: `${env.NEXT_PUBLIC_APP_URL}/payment/verify`,
+      ...(splitCode && { split_code: splitCode })
     })
 
     if (!payment.authorization_url) {
@@ -47,7 +49,7 @@ export async function initializeRegistrationPayment() {
     }
 
     // Update profile with payment reference
-    const supabase = createClientServer()
+    const supabase = await createClientServer()
 
     await supabase
       .from("profiles")
@@ -76,7 +78,7 @@ export async function verifyRegistrationPayment(reference: string) {
     const paymentData = await verifyPayment(reference)
 
     // Update the profile with payment status
-    const supabase = createClientServer()
+    const supabase = await createClientServer()
 
     if (paymentData.status === "success") {
       await supabase
@@ -129,10 +131,13 @@ export async function initializeHotelBookingPayment(
   // Generate a unique reference
   const reference = `HOTEL-${Date.now()}-${user.id.substring(0, 8)}`
 
+  // Get split code from config
+  const splitCode = await getServerConfig<string | null>("payment_split_code", null)
+
   try {
     // Initialize payment with Paystack
     const paymentData = await initiatePayment({
-      email: profile.email || `${profile.phone}@napps.org`,
+      email: profile.email || `${profile.phone}@napps.org`, // Fallback to generated email if null
       amount: totalAmount * 100,
       reference: reference,
       metadata: {
@@ -143,10 +148,11 @@ export async function initializeHotelBookingPayment(
         checkOutDate,
       },
       callback_url: `${env.NEXT_PUBLIC_APP_URL}/payment/verify`,
+      ...(splitCode && { split_code: splitCode })
     })
 
     // Create booking record
-    const supabase = createClientServer()
+    const supabase = await createClientServer()
     const { error } = await supabase.from("bookings").insert({
       user_id: user.id,
       hotel_id: hotelId,
@@ -181,7 +187,7 @@ export async function verifyHotelBookingPayment(reference: string) {
     const paymentData = await verifyPayment(reference)
 
     // Update the booking with payment status
-    const supabase = createClientServer()
+    const supabase = await createClientServer()
 
     if (paymentData.status === "success") {
       await supabase

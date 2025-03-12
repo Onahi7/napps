@@ -3,6 +3,7 @@ type EnvVars = {
   NEXT_PUBLIC_SUPABASE_URL: string
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string
   PAYSTACK_SECRET_KEY: string
+  PAYSTACK_SPLIT_CODE: string
   SUPABASE_SERVICE_ROLE_KEY: string
   NEXT_PUBLIC_APP_URL: string
 }
@@ -12,6 +13,7 @@ export const env: EnvVars = {
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY || "",
+  PAYSTACK_SPLIT_CODE: process.env.PAYSTACK_SPLIT_CODE || "",
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
@@ -29,6 +31,7 @@ export function validateEnv() {
     NEXT_PUBLIC_SUPABASE_URL: "Supabase project URL",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "Supabase anonymous key",
     PAYSTACK_SECRET_KEY: "Paystack secret key",
+    PAYSTACK_SPLIT_CODE: "Paystack split code for payment distribution",
     SUPABASE_SERVICE_ROLE_KEY: "Supabase service role key",
     NEXT_PUBLIC_APP_URL: "Application URL",
   }

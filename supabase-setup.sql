@@ -111,7 +111,8 @@ VALUES
   ('conference_name', '"6th Annual NAPPS North Central Zonal Education Summit 2025"', 'Name of the conference'),
   ('conference_date', '"May 21-22, 2025"', 'Date of the conference'),
   ('conference_venue', '"Lafia City Hall, Lafia"', 'Venue of the conference'),
-  ('conference_theme', '"ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE"', 'Theme of the conference')
+  ('conference_theme', '"ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE"', 'Theme of the conference'),
+  ('payment_split_code', 'null', 'Paystack split code for payment distribution')
 ON CONFLICT (key) DO NOTHING;
 
 -- Create RLS policies for config

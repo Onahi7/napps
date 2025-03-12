@@ -47,6 +47,10 @@ export type InitiatePaymentParams = {
   reference?: string
   callback_url?: string
   metadata?: Record<string, any>
+  subaccount?: string
+  transaction_charge?: number
+  bearer?: 'account' | 'subaccount'
+  split_code?: string
 }
 
 // Initialize payment
@@ -54,7 +58,17 @@ export async function initiatePayment(params: InitiatePaymentParams): Promise<{
   authorization_url: string
   reference: string
 }> {
-  const { email, amount, reference = `REF-${Date.now()}`, callback_url, metadata } = params
+  const { 
+    email, 
+    amount, 
+    reference = `REF-${Date.now()}`, 
+    callback_url, 
+    metadata,
+    subaccount,
+    transaction_charge,
+    bearer,
+    split_code
+  } = params
 
   try {
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -65,10 +79,14 @@ export async function initiatePayment(params: InitiatePaymentParams): Promise<{
       },
       body: JSON.stringify({
         email,
-        amount, // amount in kobo (smallest currency unit)
+        amount, // amount in kobo
         reference,
         callback_url,
         metadata,
+        ...(subaccount && { subaccount }), // Add subaccount if provided
+        ...(transaction_charge && { transaction_charge }), // Add transaction charge if provided
+        ...(bearer && { bearer }), // Add bearer if provided
+        ...(split_code && { split_code }), // Add split code if provided
       }),
     })
 

@@ -18,19 +18,35 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 async function initDatabase() {
   console.log("Initializing database...")
 
-  // Read SQL file
-  const sqlFilePath = path.join(process.cwd(), "supabase-setup.sql")
-  const sqlContent = fs.readFileSync(sqlFilePath, "utf8")
+  // Read SQL files
+  const setupSqlPath = path.join(process.cwd(), "supabase-setup.sql")
+  const hotelSqlPath = path.join(process.cwd(), "hotel-setup.sql")
+  const migrationSqlPath = path.join(process.cwd(), "migrations", "phone-login-update.sql")
 
-  // Execute SQL
-  const { error } = await supabase.rpc("exec_sql", { sql: sqlContent })
+  // Execute setup SQL directly through Supabase's REST API
+  const setupSql = fs.readFileSync(setupSqlPath, "utf8")
+  const hotelSql = fs.readFileSync(hotelSqlPath, "utf8")
+  const migrationSql = fs.readFileSync(migrationSqlPath, "utf8")
 
-  if (error) {
-    console.error("Error executing SQL:", error)
-    return
+  // Split SQL into individual statements and execute them
+  const statements = [...setupSql.split(';'), ...hotelSql.split(';'), ...migrationSql.split(';')]
+    .map(stmt => stmt.trim())
+    .filter(stmt => stmt.length > 0)
+
+  for (const stmt of statements) {
+    try {
+      const { error } = await supabase.rpc('exec_sql_statement', { statement: stmt })
+      if (error) {
+        console.error(`Error executing statement: ${stmt.substring(0, 100)}...`)
+        console.error(error)
+      }
+    } catch (error) {
+      console.error(`Error executing statement: ${stmt.substring(0, 100)}...`)
+      console.error(error)
+    }
   }
 
-  console.log("Database schema initialized successfully")
+  console.log("Database schema initialized")
 
   // Create admin user if it doesn't exist
   const adminEmail = "admin@napps.org"
@@ -102,6 +118,11 @@ async function initDatabase() {
       value: "ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE",
       description: "Theme of the conference",
     },
+    {
+      key: "payment_split_code",
+      value: "", // Using empty string instead of null
+      description: "Paystack split code for payment distribution"
+    }
   ]
 
   for (const config of configs) {
