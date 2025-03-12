@@ -9,11 +9,13 @@ export function useAuth() {
   const isAuthenticated = status === "authenticated"
 
   // Custom sign-in function that uses NextAuth
-  const login = async (email: string, password: string) => {
+  const login = async (identifier: string, loginMethod: "email" | "phone", password: string = "", isAdmin: boolean = false) => {
     try {
       const result = await signIn("credentials", {
-        email,
+        identifier,
         password,
+        loginMethod,
+        isAdmin: isAdmin.toString(),
         redirect: false,
       })
 
@@ -28,7 +30,7 @@ export function useAuth() {
     }
   }
 
-  // Custom sign-up function that creates a user in Supabase and then signs in with NextAuth
+  // Custom sign-up function that creates a user in Supabase (simplified for passwordless auth)
   const register = async (email: string, phone: string, userData: any) => {
     try {
       const supabase = createClientBrowser()
@@ -50,19 +52,24 @@ export function useAuth() {
         return { success: false, error: "This email or phone number is already registered" }
       }
 
+      // For regular users, we create a random password - user will login passwordless
+      const randomPassword = Math.random().toString(36).slice(-10);
+      
+      // Create the auth user
       const { data, error } = await supabase.auth.signUp({
         email,
-        password: phone, // Use phone as password
+        password: randomPassword,
         options: {
-          data: userData,
+          data: {
+            phone,
+            full_name: userData.full_name,
+            ...userData,
+          },
         },
       })
 
       if (error) {
         console.error("Auth error:", error)
-        if (error.message.includes("unique")) {
-          return { success: false, error: "This email or phone number is already registered" }
-        }
         return { success: false, error: error.message }
       }
 

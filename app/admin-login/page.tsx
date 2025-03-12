@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { signIn } from "next-auth/react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -38,10 +37,12 @@ export default function AdminLoginPage() {
         throw new Error("Invalid admin credentials")
       }
 
+      // Use admin-specific login flow
       const result = await signIn("credentials", {
         identifier: email,
         password: password,
         loginMethod: "email",
+        isAdmin: "true", // Set the admin flag
         redirect: false,
       })
 
@@ -80,7 +81,6 @@ export default function AdminLoginPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {error && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</div>}
-
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input 
@@ -92,7 +92,6 @@ export default function AdminLoginPage() {
                   className="border-napps-gold/30 focus-visible:ring-napps-gold"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input

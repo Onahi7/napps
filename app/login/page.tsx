@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email")
+  const [isAdminLogin, setIsAdminLogin] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,8 +32,9 @@ export default function LoginPage() {
       // Sign in with NextAuth
       const result = await signIn("credentials", {
         identifier: loginMethod === "email" ? email : phone,
-        password: loginMethod === "email" ? password : phone, // Use phone as password when logging in with phone
+        password: isAdminLogin ? password : "",  // Only send password for admin login
         loginMethod,
+        isAdmin: isAdminLogin.toString(),
         redirect: false,
       })
 
@@ -57,7 +59,6 @@ export default function LoginPage() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
-
       <div className="absolute left-4 top-4">
         <Link href="/" className="flex items-center gap-2">
           <School className="h-6 w-6 text-napps-green" />
@@ -77,6 +78,16 @@ export default function LoginPage() {
             <CardHeader>
               <CardTitle className="text-xl">Sign In</CardTitle>
               <CardDescription>Choose how you want to sign in</CardDescription>
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="admin-login"
+                  checked={isAdminLogin}
+                  onChange={() => setIsAdminLogin(!isAdminLogin)}
+                  className="h-4 w-4 rounded border-gray-300 text-napps-gold focus:ring-napps-gold"
+                />
+                <Label htmlFor="admin-login" className="text-sm">Admin Login</Label>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {error && <div className="text-sm font-medium text-destructive">{error}</div>}
@@ -100,22 +111,25 @@ export default function LoginPage() {
                       className="border-napps-gold/30 focus-visible:ring-napps-gold"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="password">Password</Label>
-                      <Link href="/forgot-password" className="text-xs text-napps-gold hover:underline">
-                        Forgot password?
-                      </Link>
+                  
+                  {isAdminLogin && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        <Link href="/forgot-password" className="text-xs text-napps-gold hover:underline">
+                          Forgot password?
+                        </Link>
+                      </div>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required={isAdminLogin}
+                        className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                      />
                     </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required={loginMethod === "email"}
-                      className="border-napps-gold/30 focus-visible:ring-napps-gold"
-                    />
-                  </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="phone" className="space-y-4">
@@ -131,11 +145,19 @@ export default function LoginPage() {
                       className="border-napps-gold/30 focus-visible:ring-napps-gold"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      When logging in with your phone number, your phone number is also your password.
-                    </p>
-                  </div>
+                  {isAdminLogin && (
+                    <div className="space-y-2">
+                      <Label htmlFor="password-phone">Password</Label>
+                      <Input
+                        id="password-phone"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required={isAdminLogin}
+                        className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                      />
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </CardContent>
