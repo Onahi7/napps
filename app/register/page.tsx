@@ -1,5 +1,4 @@
 "use client"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -9,33 +8,26 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Icons } from "@/components/icons"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { createClientBrowser } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth-hooks"
+import { useAuth } from "@/components/auth-provider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { getNigeriaStates } from "@/lib/nigeria-data"
-import { initializeRegistrationPayment } from "@/actions/payment-actions"
+import { initializePayment } from "@/lib/paystack"
+import { Loader2 } from "lucide-react"
 
 export default function RegisterPage() {
   const router = useRouter()
   const { register } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [registrationAmount, setRegistrationAmount] = useState(15000) // Default amount
   const [formData, setFormData] = useState({
-    // Personal Information
     full_name: "",
     phone: "",
     email: "",
-    
-    // School Information
     school_name: "",
     school_address: "",
-    school_city: "",
     school_state: "",
-    school_type: "",
-    
-    // NAPPS Information
-    napps_position: "",
     napps_chapter: "",
   })
 
@@ -52,47 +44,55 @@ export default function RegisterPage() {
     e.preventDefault()
     setError(null)
     setIsLoading(true)
-
     try {
       // Basic validation
       if (!formData.full_name || !formData.phone || !formData.email) {
         setError("Personal information fields are required")
+        setIsLoading(false)
         return
       }
 
-      if (!formData.school_name || !formData.school_address || !formData.school_state) {
-        setError("School information fields are required")
-        return
-      }
-
-      // Register user
-      const result = await register(
-        formData.email,
-        formData.phone,
-        {
-          full_name: formData.full_name,
-          phone: formData.phone,
-          role: "participant",
-          school_name: formData.school_name,
-          school_address: formData.school_address,
-          school_city: formData.school_city,
-          school_state: formData.school_state,
-          school_type: formData.school_type,
-          napps_position: formData.napps_position,
-          napps_chapter: formData.napps_chapter,
-        }
-      )
+      const result = await register({
+        email: formData.email,
+        phone: formData.phone,
+        full_name: formData.full_name,
+        password: "", // since this is participant registration
+        organization: formData.school_name,
+        state: formData.school_state,
+        chapter: formData.napps_chapter
+      })
 
       if (!result.success) {
         setError(result.error)
+        setIsLoading(false)
         return
       }
 
-      // Redirect to success page
-      router.push(`/registration-success?userId=${result.userId}`)
+      // Directly initialize payment after successful registration
+      try {
+        const paymentUrl = await initializePayment({
+          email: formData.email,
+          amount: registrationAmount,
+          metadata: {
+            name: formData.full_name,
+            email: formData.email
+          },
+        })
+
+        if (paymentUrl) {
+          window.location.href = paymentUrl.authorization_url
+        } else {
+          throw new Error("Payment initialization failed")
+        }
+      } catch (paymentError: any) {
+        console.error("Payment initialization failed:", paymentError)
+        // Still redirect to success page even if payment initialization fails
+        // They can try payment again from the dashboard
+        router.push('/registration-success')
+      }
+      
     } catch (error: any) {
       setError(error.message || "Registration failed")
-    } finally {
       setIsLoading(false)
     }
   }
@@ -102,19 +102,17 @@ export default function RegisterPage() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
-
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[600px]">
         <div className="flex flex-col space-y-2 text-center">
           <Icons.logo className="mx-auto h-12 w-12 text-napps-gold" />
-          <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-          <p className="text-sm text-muted-foreground">Enter your details to register for the summit</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Register & Pay</h1>
+          <p className="text-sm text-muted-foreground">Enter your details to register and pay for the summit</p>
         </div>
-
         <Card className="border-napps-gold/30 card-glow">
           <form onSubmit={handleSubmit}>
             <CardHeader>
-              <CardTitle className="text-xl">Register</CardTitle>
-              <CardDescription>Fill in the form below to create your account</CardDescription>
+              <CardTitle className="text-xl">Quick Registration</CardTitle>
+              <CardDescription>Fill in the form below to create your account and proceed to payment</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {error && <div className="text-sm font-medium text-destructive">{error}</div>}
@@ -163,7 +161,7 @@ export default function RegisterPage() {
               
               {/* School Information Section */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">School Information</h3>
+                <h3 className="text-lg font-medium">School & NAPPS Information</h3>
                 <div className="space-y-2">
                   <Label htmlFor="school_name">School Name</Label>
                   <Input
@@ -188,76 +186,21 @@ export default function RegisterPage() {
                     className="border-napps-gold/30 focus-visible:ring-napps-gold"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="school_city">City</Label>
-                    <Input
-                      id="school_city"
-                      name="school_city"
-                      placeholder="City"
-                      value={formData.school_city}
-                      onChange={handleChange}
-                      className="border-napps-gold/30 focus-visible:ring-napps-gold"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="school_state">State</Label>
-                    <Select
-                      value={formData.school_state}
-                      onValueChange={(value) => handleSelectChange("school_state", value)}
-                    >
-                      <SelectTrigger className="border-napps-gold/30 focus-visible:ring-napps-gold">
-                        <SelectValue placeholder="Select state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getNigeriaStates().map((state: string) => (
-                          <SelectItem key={state} value={state}>
-                            {state}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="school_type">School Type</Label>
+                  <Label htmlFor="school_state">State</Label>
                   <Select
-                    value={formData.school_type}
-                    onValueChange={(value) => handleSelectChange("school_type", value)}
+                    value={formData.school_state}
+                    onValueChange={(value) => handleSelectChange("school_state", value)}
                   >
                     <SelectTrigger className="border-napps-gold/30 focus-visible:ring-napps-gold">
-                      <SelectValue placeholder="Select school type" />
+                      <SelectValue placeholder="Select state" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="primary">Primary School</SelectItem>
-                      <SelectItem value="secondary">Secondary School</SelectItem>
-                      <SelectItem value="both">Both Primary and Secondary</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              {/* NAPPS Information Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">NAPPS Information</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="napps_position">Position in NAPPS</Label>
-                  <Select
-                    value={formData.napps_position}
-                    onValueChange={(value) => handleSelectChange("napps_position", value)}
-                  >
-                    <SelectTrigger className="border-napps-gold/30 focus-visible:ring-napps-gold">
-                      <SelectValue placeholder="Select your position" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="chairman">Chairman</SelectItem>
-                      <SelectItem value="vice_chairman">Vice Chairman</SelectItem>
-                      <SelectItem value="secretary">Secretary</SelectItem>
-                      <SelectItem value="treasurer">Treasurer</SelectItem>
-                      <SelectItem value="financial_secretary">Financial Secretary</SelectItem>
-                      <SelectItem value="pro">Public Relations Officer</SelectItem>
-                      <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {getNigeriaStates().map((state: string) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -271,6 +214,17 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     className="border-napps-gold/30 focus-visible:ring-napps-gold"
                   />
+                </div>
+              </div>
+              
+              {/* Payment Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Payment Information</h3>
+                <div className="rounded-md bg-muted p-4">
+                  <div className="flex items-center justify-between">
+                    <span>Registration Fee:</span>
+                    <span className="text-xl font-bold">₦{registrationAmount?.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
               
@@ -292,8 +246,14 @@ export default function RegisterPage() {
                 className="w-full bg-napps-gold text-black hover:bg-napps-gold/90 shadow-gold"
                 disabled={isLoading}
               >
-                {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-                Register & Proceed to Payment
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Register & Pay Now"
+                )}
               </Button>
               <div className="text-center text-sm">
                 Already have an account?{" "}

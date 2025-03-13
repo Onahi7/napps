@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle, XCircle, QrCode, Camera, Phone, User, Search } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/lib/auth-hooks"
+import { useAuth } from "@/components/auth-provider"
 
 export default function ValidatorScan() {
   const { user } = useAuth()
@@ -193,7 +193,7 @@ export default function ValidatorScan() {
     <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
       <DashboardSidebar role="validator" />
       <div className="flex flex-col">
-        <DashboardHeader heading="Scan QR Code" text="Validate participants for meals and accreditation">
+        <DashboardHeader title="Scan QR Code" role="validator">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Validator: {user?.name}</span>
           </div>

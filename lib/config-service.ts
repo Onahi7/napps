@@ -1,94 +1,116 @@
-import { getConfig as getConfigFromDB, updateConfig as updateConfigInDB } from "@/actions/config-actions"
+'use server'
+import { query } from "@/lib/db"
+import { CacheService } from "@/lib/cache"
 
-// Type for the configuration
-export type AppConfig = {
-  registrationAmount: number
-  registrationAmountFormatted: string
-  conferenceDate: string
-  conferenceLocation: string
-  conferenceVenue: string
-  [key: string]: any
+const cache = CacheService.getInstance()
+
+export interface ConferenceDetails {
+  name: string
+  date: string
+  venue: string
+  theme?: string
 }
 
-// Format currency amount
-export function formatCurrency(amount: number): string {
-  return `₦${amount.toLocaleString()}`
-}
-
-// Helper to parse JSON values from the database
-export function parseConfigValue(value: any): any {
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value)
-    } catch (e) {
-      return value
-    }
-  }
-  return value
-}
-
-// Get config value - exported for backward compatibility
+// Get a config value by key
 export async function getConfig(key: string): Promise<any> {
-  return getConfigFromDB(key)
-}
-
-// Get registration amount
-export async function getRegistrationAmount(): Promise<number> {
   try {
-    const result = await getConfigFromDB("registrationAmount")
-    return parseConfigValue(result) || 15000
-  } catch (error) {
-    console.error("Error getting registration amount:", error)
-    return 15000 // Default fallback
-  }
-}
-
-// Get conference details
-export async function getConferenceDetails(): Promise<{
-  conference_name: string
-  conference_date: string
-  conference_venue: string
-  conference_theme: string
-} | null> {
-  try {
-    const [name, date, venue, theme] = await Promise.all([
-      getConfigFromDB("conference_name"),
-      getConfigFromDB("conference_date"),
-      getConfigFromDB("conference_venue"),
-      getConfigFromDB("conference_theme"),
-    ])
-
-    return {
-      conference_name: name || "6th Annual NAPPS North Central Zonal Education Summit 2025",
-      conference_date: date || "May 21-22, 2025",
-      conference_venue: venue || "Lafia City Hall, Lafia",
-      conference_theme: theme || "ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE",
+    const result = await query(
+      'SELECT value FROM config WHERE key = $1',
+      [key]
+    )
+    
+    if (!result.rows[0]) {
+      return null
     }
+    
+    const value = result.rows[0].value
+    return typeof value === 'string' ? JSON.parse(value) : value
   } catch (error) {
-    console.error("Error getting conference details:", error)
+    console.error(`Error in getConfig for key ${key}:`, error)
     return null
   }
 }
 
-// Update registration amount (handles both the numeric and formatted values)
-export async function updateRegistrationAmount(amount: number): Promise<{ success: boolean; error?: string }> {
-  const formatted = formatCurrency(amount)
-
+// Update a config value
+export async function updateConfig(key: string, value: any): Promise<{ success: boolean; error?: string }> {
   try {
-    // Update the numeric value
-    const numericResult = await updateConfigInDB("registrationAmount", amount)
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
+    await query(
+      `INSERT INTO config (key, value) 
+       VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [key, stringValue]
+    )
+    
+    // Clear cache for this key
+    await cache.del(`config:${key}`)
+    return { success: true }
+  } catch (error: any) {
+    console.error(`Error in updateConfig for key ${key}:`, error)
+    return { success: false, error: error.message }
+  }
+}
 
-    if (!numericResult.success) {
-      return numericResult
+// Get specific configs
+export async function getRegistrationAmount(): Promise<number> {
+  return getConfig('registrationAmount') || 15000
+}
+
+export async function getConferenceDetails(): Promise<ConferenceDetails> {
+  const cachedConfig = await cache.get('conference_details')
+  if (cachedConfig) return cachedConfig as ConferenceDetails
+
+  const config = await getConferenceConfig()
+  const details: ConferenceDetails = {
+    name: config.conference_name || '6th Annual NAPPS North Central Zonal Education Summit 2025',
+    date: config.conference_date || 'May 21-22, 2025',
+    venue: config.conference_venue || 'Lafia City Hall, Lafia',
+    theme: config.conference_theme || 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE'
+  }
+
+  await cache.set('conference_details', details, 3600) // Cache for 1 hour
+  return details
+}
+
+// Get essential conference settings
+export async function getConferenceConfig() {
+  return cache.cached('conference_config', async () => {
+    const result = await query(`
+      SELECT key, value 
+      FROM config 
+      WHERE key IN (
+        'conference_name',
+        'conference_date',
+        'conference_venue',
+        'conference_theme',
+        'registrationAmount'
+      )
+    `)
+
+    const config: Record<string, any> = {}
+    for (const row of result.rows) {
+      config[row.key] = typeof row.value === 'string' 
+        ? JSON.parse(row.value) 
+        : row.value
     }
 
-    // Update the formatted value
-    const formattedResult = await updateConfigInDB("registrationAmountFormatted", formatted)
+    return config
+  }, 3600) // Cache for 1 hour
+}
 
-    return formattedResult
-  } catch (error) {
-    console.error("Error updating registration amount:", error)
-    return { success: false, error: "Failed to update registration amount" }
+// Initialize default configuration
+export async function initializeDefaultConfig(): Promise<void> {
+  const defaultConfig = {
+    registrationAmount: 15000,
+    conference_name: '6th Annual NAPPS North Central Zonal Education Summit 2025',
+    conference_date: 'May 21-22, 2025',
+    conference_venue: 'Lafia City Hall, Lafia',
+    conference_theme: 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE',
+    payment_split_code: null
+  }
+
+  for (const [key, value] of Object.entries(defaultConfig)) {
+    await updateConfig(key, value)
   }
 }
 

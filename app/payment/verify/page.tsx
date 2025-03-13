@@ -7,11 +7,18 @@ import { Button } from "@/components/ui/button"
 import { verifyRegistrationPayment, verifyHotelBookingPayment } from "@/actions/payment-actions"
 import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 
+interface PaymentVerificationResult {
+  verified: boolean;
+  error?: string;
+  status?: string;
+}
+
 export default function PaymentVerifyPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const reference = searchParams.get("reference")
   const trxref = searchParams.get("trxref")
+  const bookingId = searchParams.get("bookingId")
   const [status, setStatus] = useState<"loading" | "success" | "failed">("loading")
   const [error, setError] = useState<string | null>(null)
   const [paymentType, setPaymentType] = useState<"registration" | "hotel" | null>(null)
@@ -30,16 +37,16 @@ export default function PaymentVerifyPage() {
         // Try to verify as registration payment first
         const result = await verifyRegistrationPayment(paymentRef!)
 
-        if (result.success) {
+        if (result.verified) {
           setPaymentType("registration")
-          setStatus(result.status === "paid" ? "success" : "failed")
+          setStatus("success")
         } else {
-          // If not a registration payment, try as hotel booking payment
-          const hotelResult = await verifyHotelBookingPayment(paymentRef!)
+          if (!bookingId) throw new Error("Booking ID not found")
+            const hotelResult: PaymentVerificationResult = await verifyHotelBookingPayment(paymentRef!, bookingId)
 
-          if (hotelResult.success) {
+          if (hotelResult.verified) {
             setPaymentType("hotel")
-            setStatus(hotelResult.status === "paid" ? "success" : "failed")
+            setStatus("success")
           } else {
             setStatus("failed")
             setError(hotelResult.error || "Payment verification failed")

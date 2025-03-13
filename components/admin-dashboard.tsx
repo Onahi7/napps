@@ -36,9 +36,9 @@ export function AdminDashboard() {
 
         if (details) {
           setConferenceDetails({
-            name: details.conference_name || conferenceDetails.name,
-            date: details.conference_date || conferenceDetails.date,
-            venue: details.conference_venue || conferenceDetails.venue,
+            name: details.name || conferenceDetails.name,
+            date: details.date || conferenceDetails.date,
+            venue: details.venue || conferenceDetails.venue,
           })
         }
       } catch (error) {
@@ -175,4 +175,6 @@ export function AdminDashboard() {
     </div>
   )
 }
+
+export default AdminDashboard;
 

@@ -1,296 +1,111 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+export interface User {
+  id: string;
+  email: string;
+  password_hash: string;
+  created_at: Date;
+  updated_at: Date;
+}
 
-export interface Database {
-  public: {
-    Tables: {
-      profiles: {
-        Row: {
-          id: string
-          created_at: string
-          updated_at: string
-          email: string | null
-          full_name: string
-          phone: string
-          role: "admin" | "participant" | "validator"
-          state: string | null
-          lga: string | null
-          chapter: string | null
-          organization: string | null
-          position: string | null
-          avatar_url: string | null
-          payment_status: "pending" | "paid" | "failed"
-          payment_reference: string | null
-          payment_amount: number | null
-          payment_date: string | null
-          accreditation_status: "pending" | "approved" | "rejected"
-          accreditation_date: string | null
-          qr_code: string | null
-          unique_id: string | null
-          school_name: string | null
-          school_address: string | null
-          school_city: string | null
-          school_state: string | null
-          school_type: string | null
-          napps_position: string | null
-          napps_chapter: string | null
-        }
-        Insert: {
-          id: string
-          created_at?: string
-          updated_at?: string
-          email?: string | null
-          full_name: string
-          phone: string
-          role?: "admin" | "participant" | "validator"
-          state?: string | null
-          lga?: string | null
-          chapter?: string | null
-          organization?: string | null
-          position?: string | null
-          avatar_url?: string | null
-          payment_status?: "pending" | "paid" | "failed"
-          payment_reference?: string | null
-          payment_amount?: number | null
-          payment_date?: string | null
-          accreditation_status?: "pending" | "approved" | "rejected"
-          accreditation_date?: string | null
-          qr_code?: string | null
-          unique_id?: string | null
-          school_name?: string | null
-          school_address?: string | null
-          school_city?: string | null
-          school_state?: string | null
-          school_type?: string | null
-          napps_position?: string | null
-          napps_chapter?: string | null
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          email?: string | null
-          full_name?: string
-          phone?: string
-          role?: "admin" | "participant" | "validator"
-          state?: string | null
-          lga?: string | null
-          chapter?: string | null
-          organization?: string | null
-          position?: string | null
-          avatar_url?: string | null
-          payment_status?: "pending" | "paid" | "failed"
-          payment_reference?: string | null
-          payment_amount?: number | null
-          payment_date?: string | null
-          accreditation_status?: "pending" | "approved" | "rejected"
-          accreditation_date?: string | null
-          qr_code?: string | null
-          unique_id?: string | null
-          school_name?: string | null
-          school_address?: string | null
-          school_city?: string | null
-          school_state?: string | null
-          school_type?: string | null
-          napps_position?: string | null
-          napps_chapter?: string | null
-        }
-      }
-      config: {
-        Row: {
-          id: string
-          created_at: string
-          key: string
-          value: Json
-          description: string | null
-        }
-        Insert: {
-          id?: string
-          created_at?: string
-          key: string
-          value: Json
-          description?: string | null
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          key?: string
-          value?: Json
-          description?: string | null
-        }
-      }
-      bookings: {
-        Row: {
-          id: string
-          created_at: string
-          updated_at: string
-          user_id: string
-          hotel_id: string
-          room_type: string
-          check_in_date: string
-          check_out_date: string
-          total_nights: number
-          price_per_night: number
-          total_amount: number
-          special_requests: string | null
-          status: "pending" | "confirmed" | "cancelled"
-          payment_status: "pending" | "paid" | "failed"
-          payment_reference: string | null
-        }
-        Insert: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          user_id: string
-          hotel_id: string
-          room_type: string
-          check_in_date: string
-          check_out_date: string
-          total_nights: number
-          price_per_night: number
-          total_amount: number
-          special_requests?: string | null
-          status?: "pending" | "confirmed" | "cancelled"
-          payment_reference?: string | null
-          payment_status?: "pending" | "paid" | "failed"
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          user_id?: string
-          hotel_id?: string
-          room_type?: string
-          check_in_date?: string
-          check_out_date?: string
-          total_nights?: number
-          price_per_night?: number
-          total_amount?: number
-          special_requests?: string | null
-          status?: "pending" | "confirmed" | "cancelled"
-          payment_reference?: string | null
-          payment_status?: "pending" | "paid" | "failed"
-        }
-      }
-      hotels: {
-        Row: {
-          id: string
-          created_at: string
-          updated_at: string
-          name: string
-          description: string | null
-          address: string | null
-          price_per_night: number
-          price_category: "economy" | "standard" | "premium"
-          distance_from_venue: number
-          rating: number
-          reviews_count: number
-          image_url: string | null
-          available_rooms: number
-          amenities: string[] | null
-          contact_phone: string | null
-          contact_whatsapp: string | null
-          featured: boolean
-        }
-        Insert: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          name: string
-          description?: string | null
-          address?: string | null
-          price_per_night: number
-          price_category: "economy" | "standard" | "premium"
-          distance_from_venue: number
-          rating?: number
-          reviews_count?: number
-          image_url?: string | null
-          available_rooms?: number
-          amenities?: string[] | null
-          contact_phone?: string | null
-          contact_whatsapp?: string | null
-          featured?: boolean
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          name?: string
-          description?: string | null
-          address?: string | null
-          price_per_night?: number
-          price_category?: "economy" | "standard" | "premium"
-          distance_from_venue?: number
-          rating?: number
-          reviews_count?: number
-          image_url?: string | null
-          available_rooms?: number
-          amenities?: string[] | null
-          contact_phone?: string | null
-          contact_whatsapp?: string | null
-          featured?: boolean
-        }
-      }
-      resources: {
-        Row: {
-          id: string
-          created_at: string
-          updated_at: string
-          title: string
-          description: string | null
-          file_url: string | null
-          type: string | null
-          is_public: boolean
-        }
-        Insert: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          title: string
-          description?: string | null
-          file_url?: string | null
-          type?: string | null
-          is_public?: boolean
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          title?: string
-          description?: string | null
-          file_url?: string | null
-          type?: string | null
-          is_public?: boolean
-        }
-      }
-      scans: {
-        Row: {
-          id: string
-          created_at: string
-          user_id: string
-          scanned_by: string
-          scan_type: string
-          location: string | null
-          notes: string | null
-        }
-        Insert: {
-          id?: string
-          created_at?: string
-          user_id: string
-          scanned_by: string
-          scan_type?: string
-          location?: string | null
-          notes?: string | null
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          user_id?: string
-          scanned_by?: string
-          scan_type?: string
-          location?: string | null
-          notes?: string | null
-        }
-      }
-    }
-  }
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string;
+  role: 'admin' | 'validator' | 'participant';
+  state?: string;
+  lga?: string;
+  chapter?: string;
+  organization?: string;
+  position?: string;
+  avatar_url?: string;
+  payment_status: 'pending' | 'completed';
+  payment_reference?: string;
+  payment_amount?: number;
+  payment_date?: Date;
+  accreditation_status: 'pending' | 'completed';
+  accreditation_date?: Date;
+  qr_code?: string;
+  unique_id?: string;
+  bio?: string;
+  dietary_requirements?: string;
+  school_name?: string;
+  school_address?: string;
+  school_city?: string;
+  school_state?: string;
+  school_type?: string;
+  napps_position?: string;
+  napps_chapter?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Config {
+  id: string;
+  key: string;
+  value: any;
+  description?: string;
+  created_at: Date;
+}
+
+export interface Booking {
+  id: string;
+  user_id: string;
+  hotel_id: string;
+  check_in_date: Date;
+  check_out_date: Date;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  payment_reference?: string;
+  payment_status: 'pending' | 'completed';
+  total_amount: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Hotel {
+  id: string;
+  name: string;
+  description?: string;
+  address?: string;
+  price_per_night: number;
+  image_url?: string;
+  available_rooms: number;
+  amenities?: any[];
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Resource {
+  id: string;
+  title: string;
+  description?: string;
+  file_url: string;
+  type?: string;
+  is_public: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Scan {
+  id: string;
+  user_id: string;
+  scanned_by: string;
+  scan_type: 'accreditation' | 'attendance';
+  location?: string;
+  notes?: string;
+  created_at: Date;
+}
+
+export interface DbMetrics {
+  totalConnections: number;
+  activeConnections: number;
+  idleConnections: number;
+  waitingQueries: number;
+  lastError?: Error;
+  lastErrorTime?: Date;
+}
+
+export interface PoolState {
+  totalCount: number;
+  idleCount: number;
+  waitingCount: number;
 }

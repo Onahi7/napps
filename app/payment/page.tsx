@@ -55,10 +55,9 @@ export default function PaymentPage() {
 
   const handlePayment = async () => {
     if (!session || !registrationAmount) return
-
     setInitiatingPayment(true)
     try {
-      const paymentUrl = await initializePayment({
+      const paymentResponse = await initializePayment({
         email: session.user.phone, // Using phone as email is not required
         amount: registrationAmount,
         metadata: {
@@ -66,9 +65,8 @@ export default function PaymentPage() {
           name: session.user.full_name,
         },
       })
-
-      if (paymentUrl) {
-        window.location.href = paymentUrl
+      if (paymentResponse) {
+        window.location.href = paymentResponse.authorization_url
       }
     } catch (error) {
       console.error("Payment initialization failed:", error)

@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { CheckSquare, Users, Search, Download, Clock, User, CheckCircle, XCircle, BarChart } from "lucide-react"
 import { useState } from "react"
-import { useAuth } from "@/lib/auth-hooks"
+import { useAuth } from "@/components/auth-provider"
 
 export default function AdminAccreditation() {
   const auth = useAuth()
@@ -74,15 +74,17 @@ export default function AdminAccreditation() {
     <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
       <DashboardSidebar role="admin" />
       <div className="flex flex-col">
-        <DashboardHeader heading="Accreditation Management" text="Manage participant accreditation status">
-          <div className="flex items-center gap-2">
+        <DashboardHeader 
+          role="admin" 
+          title="Accreditation Management"
+        />
+        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+          <div className="flex justify-end mb-4">
             <Button variant="outline" size="sm" className="h-8 gap-1">
               <Download className="h-3.5 w-3.5" />
               <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">Export CSV</span>
             </Button>
           </div>
-        </DashboardHeader>
-        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

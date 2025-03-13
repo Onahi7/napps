@@ -1,90 +1,93 @@
-"use server"
+'use server'
+import { query } from '@/lib/db'
+import { getCurrentProfile } from '@/lib/auth'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
+import { revalidatePath } from 'next/cache'
 
-import { createClientServer } from "@/lib/supabase"
-import { getCurrentUser } from "@/lib/auth"
-import { revalidatePath } from "next/cache"
-
-export async function updateProfile(formData: {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  organization: string
-  bio: string
-  dietaryRequirements: string
-  // New school fields
-  schoolName: string
-  schoolAddress: string
-  schoolCity: string
-  schoolState: string
-  schoolType: string
-  // New NAPPS fields
-  nappsPosition: string
-  nappsChapter: string
+export async function updateUserProfile(data: {
+  full_name?: string
+  email?: string
+  phone?: string
+  state?: string
+  lga?: string
+  chapter?: string
+  organization?: string
+  position?: string
+  bio?: string
+  dietary_requirements?: string
+  school_name?: string
+  school_address?: string
+  school_city?: string
+  school_state?: string
+  school_type?: string
+  napps_position?: string
+  napps_chapter?: string
 }) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return { success: false, error: "Not authenticated" }
-    }
+    const fields = Object.keys(data)
+    const values = Object.values(data)
+    const setClause = fields.map((field, i) => `${field} = $${i + 2}`).join(', ')
 
-    const supabase = await createClientServer()
+    await query(
+      `UPDATE profiles 
+       SET ${setClause}, updated_at = NOW()
+       WHERE id = $1`,
+      [session.user.id, ...values]
+    )
 
-    // First check if email is already taken by another user
-    if (formData.email !== user.email) {
-      const { data: existingUser } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", formData.email)
-        .neq("id", user.id)
-        .maybeSingle()
-
-      if (existingUser) {
-        return { success: false, error: "Email is already taken" }
-      }
-
-      // Update auth email first
-      const { error: authError } = await supabase.auth.updateUser({
-        email: formData.email,
-      })
-
-      if (authError) {
-        return { success: false, error: authError.message }
-      }
-    }
-
-    // Then update profile with all fields including new school and NAPPS information
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        email: formData.email,
-        full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-        phone: formData.phone,
-        organization: formData.organization,
-        bio: formData.bio,
-        dietary_requirements: formData.dietaryRequirements,
-        // New school fields
-        school_name: formData.schoolName,
-        school_address: formData.schoolAddress,
-        school_city: formData.schoolCity,
-        school_state: formData.schoolState,
-        school_type: formData.schoolType,
-        // New NAPPS fields
-        napps_position: formData.nappsPosition,
-        napps_chapter: formData.nappsChapter,
-        // Update timestamp
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id)
-
-    if (profileError) {
-      return { success: false, error: profileError.message }
-    }
-
-    revalidatePath("/participant/profile")
+    revalidatePath('/participant/profile')
     return { success: true }
   } catch (error: any) {
-    console.error("Profile update error:", error)
+    console.error('Error updating profile:', error)
     return { success: false, error: error.message }
   }
 }
+
+export async function getMyProfile() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return null
+  
+  return getCurrentProfile(session.user.id)
+}
+
+export async function searchProfiles(searchQuery: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  const result = await query(
+    `SELECT id, full_name, email, phone, role, payment_status, accreditation_status
+     FROM profiles
+     WHERE full_name ILIKE $1 
+        OR email ILIKE $1 
+        OR phone ILIKE $1
+     ORDER BY full_name
+     LIMIT 20`,
+    [`%${searchQuery}%`]
+  )
+
+  return result.rows
+}
+
+export async function getProfileStats() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  const stats = await query(`
+    SELECT
+      COUNT(*) as total_profiles,
+      COUNT(CASE WHEN payment_status = 'completed' THEN 1 END) as paid_profiles,
+      COUNT(CASE WHEN accreditation_status = 'completed' THEN 1 END) as accredited_profiles,
+      COUNT(CASE WHEN role = 'participant' THEN 1 END) as total_participants,
+      COUNT(CASE WHEN role = 'validator' THEN 1 END) as total_validators
+    FROM profiles
+  `)
+
+  return stats.rows[0]
+}
+
+// Adding new updateProfile function that's an alias to updateUserProfile for compatibility
+export const updateProfile = updateUserProfile;

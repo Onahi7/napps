@@ -43,17 +43,13 @@ export default function LoginPage() {
         return
       }
 
-      // Determine redirect based on admin status
-      if (isAdminLogin) {
-        router.push("/admin/dashboard")
-      } else {
-        router.push("/participant/dashboard")
-      }
-      
+      // Successful login - Redirect based on role
+      router.push(isAdminLogin ? "/admin/dashboard" : "/participant/dashboard")
       router.refresh()
     } catch (err: any) {
       console.error("Login error:", err)
       setError(err.message || "An error occurred during login")
+    } finally {
       setIsLoading(false)
     }
   }
@@ -69,6 +65,7 @@ export default function LoginPage() {
           <span className="font-semibold text-napps-green">NAPPS Conference</span>
         </Link>
       </div>
+
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
         <div className="flex flex-col space-y-2 text-center">
           <Icons.logo className="mx-auto h-12 w-12 text-napps-gold" />
@@ -86,14 +83,22 @@ export default function LoginPage() {
                   type="checkbox"
                   id="admin-login"
                   checked={isAdminLogin}
-                  onChange={() => setIsAdminLogin(!isAdminLogin)}
+                  onChange={() => {
+                    setIsAdminLogin(!isAdminLogin)
+                    setError(null) // Clear any previous errors
+                  }}
                   className="h-4 w-4 rounded border-gray-300 text-napps-gold focus:ring-napps-gold"
                 />
                 <Label htmlFor="admin-login" className="text-sm">Admin Login</Label>
               </div>
             </CardHeader>
+
             <CardContent className="space-y-4">
-              {error && <div className="text-sm font-medium text-destructive">{error}</div>}
+              {error && (
+                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
               
               <Tabs defaultValue="email" onValueChange={(value) => setLoginMethod(value as "email" | "phone")}>
                 <TabsList className="grid w-full grid-cols-2">
@@ -112,6 +117,7 @@ export default function LoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       required={loginMethod === "email"}
                       className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                      disabled={isLoading}
                     />
                   </div>
                   
@@ -130,6 +136,7 @@ export default function LoginPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         required={isAdminLogin}
                         className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                        disabled={isLoading}
                       />
                     </div>
                   )}
@@ -146,6 +153,7 @@ export default function LoginPage() {
                       onChange={(e) => setPhone(e.target.value)}
                       required={loginMethod === "phone"}
                       className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                      disabled={isLoading}
                     />
                   </div>
                   {isAdminLogin && (
@@ -158,12 +166,14 @@ export default function LoginPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         required={isAdminLogin}
                         className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                        disabled={isLoading}
                       />
                     </div>
                   )}
                 </TabsContent>
               </Tabs>
             </CardContent>
+
             <CardFooter className="flex flex-col space-y-4">
               <Button
                 type="submit"

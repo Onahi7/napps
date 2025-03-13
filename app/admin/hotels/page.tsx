@@ -21,7 +21,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { getHotels, addHotel, updateHotel, deleteHotel } from "@/actions/hotel-actions"
+import {
+  getHotels,
+  updateHotel,
+  deleteHotel,
+  createHotel,
+} from "@/actions/hotel-actions"
 import {
   Loader2,
   Plus,
@@ -58,25 +63,25 @@ import {
 const renderAmenityIcon = (amenity: string) => {
   switch (amenity) {
     case "wifi":
-      return <Wifi className="h-4 w-4" title="WiFi" />
+      return <Wifi className="h-4 w-4" />
     case "breakfast":
-      return <Coffee className="h-4 w-4" title="Breakfast Included" />
+      return <Coffee className="h-4 w-4" />
     case "pool":
-      return <Droplets className="h-4 w-4" title="Swimming Pool" />
+      return <Droplets className="h-4 w-4" />
     case "parking":
-      return <Car className="h-4 w-4" title="Free Parking" />
+      return <Car className="h-4 w-4" />
     case "restaurant":
-      return <UtensilsCrossed className="h-4 w-4" title="Restaurant" />
+      return <UtensilsCrossed className="h-4 w-4" />
     case "tv":
-      return <Tv className="h-4 w-4" title="TV" />
+      return <Tv className="h-4 w-4" />
     case "ac":
-      return <Snowflake className="h-4 w-4" title="Air Conditioning" />
+      return <Snowflake className="h-4 w-4" />
     case "minibar":
-      return <Coffee className="h-4 w-4" title="Mini Bar" />
+      return <Coffee className="h-4 w-4" />
     case "workspace":
-      return <Maximize className="h-4 w-4" title="Workspace" />
+      return <Maximize className="h-4 w-4" />
     case "bathtub":
-      return <ShowerHead className="h-4 w-4" title="Bathtub" />
+      return <ShowerHead className="h-4 w-4" />
     default:
       return null
   }
@@ -160,25 +165,21 @@ export default function AdminHotelsPage() {
     setIsSubmitting(true)
 
     try {
-      const formDataObj = new FormData()
-      formDataObj.append("name", formData.name)
-      formDataObj.append("description", formData.description)
-      formDataObj.append("address", formData.address)
-      formDataObj.append("pricePerNight", formData.pricePerNight)
-      formDataObj.append("priceCategory", formData.priceCategory)
-      formDataObj.append("distanceFromVenue", formData.distanceFromVenue)
-      formDataObj.append("rating", formData.rating || "0")
-      formDataObj.append("availableRooms", formData.availableRooms)
-      formDataObj.append("amenities", formData.amenities)
-      formDataObj.append("contactPhone", formData.contactPhone)
-      formDataObj.append("contactWhatsapp", formData.contactWhatsapp)
-      formDataObj.append("featured", formData.featured.toString())
-
-      if (imageFile) {
-        formDataObj.append("image", imageFile)
+      const hotelData = {
+        name: formData.name,
+        description: formData.description,
+        address: formData.address,
+        price_per_night: Number(formData.pricePerNight),
+        available_rooms: Number(formData.availableRooms),
+        amenities: formData.amenities.split(',').map(item => item.trim())
       }
 
-      const result = await addHotel(formDataObj)
+      if (imageFile) {
+        // Handle image upload separately if needed
+        // Add image_url to hotelData after upload
+      }
+
+      const result = await createHotel(hotelData)
 
       if (result.success) {
         toast({
@@ -214,27 +215,21 @@ export default function AdminHotelsPage() {
     setIsSubmitting(true)
 
     try {
-      const formDataObj = new FormData()
-      formDataObj.append("name", formData.name)
-      formDataObj.append("description", formData.description)
-      formDataObj.append("address", formData.address)
-      formDataObj.append("pricePerNight", formData.pricePerNight)
-      formDataObj.append("priceCategory", formData.priceCategory)
-      formDataObj.append("distanceFromVenue", formData.distanceFromVenue)
-      formDataObj.append("rating", formData.rating || "0")
-      formDataObj.append("availableRooms", formData.availableRooms)
-      formDataObj.append("amenities", formData.amenities)
-      formDataObj.append("contactPhone", formData.contactPhone)
-      formDataObj.append("contactWhatsapp", formData.contactWhatsapp)
-      formDataObj.append("featured", formData.featured.toString())
-
-      if (imageFile) {
-        formDataObj.append("image", imageFile)
+      const hotelData = {
+        name: formData.name,
+        description: formData.description,
+        address: formData.address,
+        price_per_night: Number(formData.pricePerNight),
+        available_rooms: Number(formData.availableRooms),
+        amenities: formData.amenities.split(',').map(item => item.trim())
       }
 
-      formDataObj.append("currentImageUrl", selectedHotel.image_url || "")
+      if (imageFile) {
+        // TODO: Handle image upload separately if needed
+        // hotelData.image_url = uploaded_image_url
+      }
 
-      const result = await updateHotel(selectedHotel.id, formDataObj)
+      const result = await updateHotel(selectedHotel.id, hotelData)
 
       if (result.success) {
         toast({
@@ -247,7 +242,7 @@ export default function AdminHotelsPage() {
       } else {
         toast({
           title: "Error",
-          description: result.error || "Failed to update hotel",
+          description: "Failed to update hotel",
           variant: "destructive",
         })
       }
@@ -276,7 +271,7 @@ export default function AdminHotelsPage() {
       } else {
         toast({
           title: "Error",
-          description: result.error || "Failed to delete hotel",
+          description: "Failed to delete hotel",
           variant: "destructive",
         })
       }

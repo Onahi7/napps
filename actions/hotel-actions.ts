@@ -1,303 +1,178 @@
-"use server"
+'use server'
 
-import { createClientServer } from "@/lib/supabase"
-import { revalidatePath } from "next/cache"
-import { getCurrentUser } from "@/lib/auth"
-import type { Database } from "@/lib/database.types"
+import { query, withTransaction } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
+import { revalidatePath } from 'next/cache'
 
-type Hotel = Database["public"]["Tables"]["hotels"]["Row"]
-type Booking = Database["public"]["Tables"]["bookings"]["Row"]
-
-// Get all hotels
-export async function getHotels(): Promise<Hotel[]> {
-  const supabase = createClientServer()
-
-  const { data, error } = await supabase
-    .from("hotels")
-    .select("*")
-    .order("featured", { ascending: false })
-    .order("rating", { ascending: false })
-
-  if (error) {
-    console.error("Error fetching hotels:", error)
-    return []
-  }
-
-  return data || []
+export async function getHotels() {
+  const result = await query(
+    'SELECT * FROM hotels ORDER BY price_per_night ASC'
+  )
+  return result.rows
 }
 
-// Get hotel by ID
-export async function getHotelById(id: string): Promise<Hotel | null> {
-  const supabase = createClientServer()
-
-  const { data, error } = await supabase.from("hotels").select("*").eq("id", id).single()
-
-  if (error || !data) {
-    console.error("Error fetching hotel:", error)
-    return null
-  }
-
-  return data
+export async function getHotel(hotelId: string) {
+  const result = await query(
+    'SELECT * FROM hotels WHERE id = $1',
+    [hotelId]
+  )
+  return result.rows[0] || null
 }
 
-// Add a new hotel (admin only)
-export async function addHotel(formData: FormData) {
-  const user = await getCurrentUser()
+export async function createHotel(data: {
+  name: string
+  description?: string
+  address?: string
+  price_per_night: number
+  image_url?: string
+  available_rooms?: number
+  amenities?: any[]
+}) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
 
-  if (!user) {
-    return { success: false, error: "Not authenticated" }
-  }
+  const result = await query(
+    `INSERT INTO hotels (
+      name, description, address, price_per_night, 
+      image_url, available_rooms, amenities
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id`,
+    [
+      data.name,
+      data.description,
+      data.address,
+      data.price_per_night,
+      data.image_url,
+      data.available_rooms || 0,
+      JSON.stringify(data.amenities || [])
+    ]
+  )
 
-  const name = formData.get("name") as string
-  const description = formData.get("description") as string
-  const address = formData.get("address") as string
-  const pricePerNight = Number(formData.get("pricePerNight"))
-  const priceCategory = formData.get("priceCategory") as string
-  const distanceFromVenue = Number(formData.get("distanceFromVenue"))
-  const rating = Number(formData.get("rating") || 0)
-  const imageFile = formData.get("image") as File
-  const availableRooms = Number(formData.get("availableRooms"))
-  const amenitiesString = formData.get("amenities") as string
-  const contactPhone = formData.get("contactPhone") as string
-  const contactWhatsapp = formData.get("contactWhatsapp") as string
-  const featured = formData.get("featured") === "true"
+  revalidatePath('/admin/hotels')
+  return result.rows[0].id
+}
 
-  const amenities = amenitiesString.split(",").map((item) => item.trim())
+export async function updateHotel(hotelId: string, data: {
+  name?: string
+  description?: string
+  address?: string
+  price_per_night?: number
+  image_url?: string
+  available_rooms?: number
+  amenities?: any[]
+}) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const supabase = createClientServer()
+  const fields = Object.keys(data)
+  const values = Object.values(data)
+  const setClause = fields.map((field, i) => {
+    if (field === 'amenities') {
+      values[i] = JSON.stringify(values[i])
+    }
+    return `${field} = $${i + 2}`
+  }).join(', ')
 
-  let imageUrl = ""
+  await query(
+    `UPDATE hotels 
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $1`,
+    [hotelId, ...values]
+  )
 
-  // Upload the image to Supabase Storage if provided
-  if (imageFile && imageFile.size > 0) {
-    const { data: fileData, error: fileError } = await supabase.storage
-      .from("hotels")
-      .upload(`${Date.now()}-${imageFile.name}`, imageFile, {
-        cacheControl: "3600",
-        upsert: true,
-      })
+  revalidatePath('/admin/hotels')
+  return { success: true }
+}
 
-    if (fileError) {
-      console.error("Error uploading hotel image:", fileError)
-      return { success: false, error: fileError.message }
+export async function deleteHotel(hotelId: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  await query(
+    'DELETE FROM hotels WHERE id = $1',
+    [hotelId]
+  )
+
+  revalidatePath('/admin/hotels')
+  return { success: true }
+}
+
+export async function createBooking(hotelId: string, data: {
+  check_in_date: Date
+  check_out_date: Date
+  total_amount: number
+}) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  return await withTransaction(async (client) => {
+    // Check hotel availability
+    const hotel = await client.query(
+      'SELECT available_rooms FROM hotels WHERE id = $1',
+      [hotelId]
+    )
+
+    if (!hotel.rows[0] || hotel.rows[0].available_rooms < 1) {
+      throw new Error('No rooms available')
     }
 
-    // Get the public URL
-    const { data: urlData } = supabase.storage.from("hotels").getPublicUrl(fileData.path)
-    imageUrl = urlData.publicUrl
-  }
+    // Create booking
+    const booking = await client.query(
+      `INSERT INTO bookings (
+        user_id, hotel_id, check_in_date, check_out_date, 
+        total_amount, status, payment_status
+      ) VALUES ($1, $2, $3, $4, $5, 'confirmed', 'pending')
+      RETURNING id`,
+      [
+        session.user.id,
+        hotelId,
+        data.check_in_date,
+        data.check_out_date,
+        data.total_amount
+      ]
+    )
 
-  // Create the hotel record
-  const { error } = await supabase.from("hotels").insert({
-    name,
-    description,
-    address,
-    price_per_night: pricePerNight,
-    price_category: priceCategory,
-    distance_from_venue: distanceFromVenue,
-    rating,
-    image_url: imageUrl,
-    available_rooms: availableRooms,
-    amenities,
-    contact_phone: contactPhone,
-    contact_whatsapp: contactWhatsapp,
-    featured,
+    // Update hotel availability
+    await client.query(
+      'UPDATE hotels SET available_rooms = available_rooms - 1 WHERE id = $1',
+      [hotelId]
+    )
+
+    revalidatePath('/participant/accommodation')
+    return booking.rows[0].id
   })
-
-  if (error) {
-    console.error("Error creating hotel:", error)
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath("/admin/hotels")
-  return { success: true }
 }
 
-// Update a hotel (admin only)
-export async function updateHotel(id: string, formData: FormData) {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" }
-  }
-
-  const name = formData.get("name") as string
-  const description = formData.get("description") as string
-  const address = formData.get("address") as string
-  const pricePerNight = Number(formData.get("pricePerNight"))
-  const priceCategory = formData.get("priceCategory") as string
-  const distanceFromVenue = Number(formData.get("distanceFromVenue"))
-  const rating = Number(formData.get("rating") || 0)
-  const imageFile = formData.get("image") as File | null
-  const availableRooms = Number(formData.get("availableRooms"))
-  const amenitiesString = formData.get("amenities") as string
-  const contactPhone = formData.get("contactPhone") as string
-  const contactWhatsapp = formData.get("contactWhatsapp") as string
-  const featured = formData.get("featured") === "true"
-
-  const amenities = amenitiesString.split(",").map((item) => item.trim())
-
-  const supabase = createClientServer()
-
-  let imageUrl = formData.get("currentImageUrl") as string
-
-  // If a new image is provided, upload it
-  if (imageFile && imageFile.size > 0) {
-    const { data: fileData, error: fileError } = await supabase.storage
-      .from("hotels")
-      .upload(`${Date.now()}-${imageFile.name}`, imageFile, {
-        cacheControl: "3600",
-        upsert: true,
-      })
-
-    if (fileError) {
-      console.error("Error uploading hotel image:", fileError)
-      return { success: false, error: fileError.message }
-    }
-
-    // Get the public URL
-    const { data: urlData } = supabase.storage.from("hotels").getPublicUrl(fileData.path)
-
-    imageUrl = urlData.publicUrl
-  }
-
-  // Update the hotel record
-  const { error } = await supabase
-    .from("hotels")
-    .update({
-      name,
-      description,
-      address,
-      price_per_night: pricePerNight,
-      price_category: priceCategory,
-      distance_from_venue: distanceFromVenue,
-      rating,
-      image_url: imageUrl,
-      available_rooms: availableRooms,
-      amenities,
-      contact_phone: contactPhone,
-      contact_whatsapp: contactWhatsapp,
-      featured,
-    })
-    .eq("id", id)
-
-  if (error) {
-    console.error("Error updating hotel:", error)
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath("/admin/hotels")
-  return { success: true }
-}
-
-// Delete a hotel (admin only)
-export async function deleteHotel(id: string) {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" }
-  }
-
-  const supabase = createClientServer()
-
-  // Delete the hotel record
-  const { error } = await supabase.from("hotels").delete().eq("id", id)
-
-  if (error) {
-    console.error("Error deleting hotel:", error)
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath("/admin/hotels")
-  return { success: true }
-}
-
-// Get user's bookings
 export async function getUserBookings() {
-  const user = await getCurrentUser()
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
 
-  if (!user) {
-    return []
-  }
+  const result = await query(
+    `SELECT b.*, h.name as hotel_name, h.address
+     FROM bookings b
+     JOIN hotels h ON b.hotel_id = h.id
+     WHERE b.user_id = $1
+     ORDER BY b.created_at DESC`,
+    [session.user.id]
+  )
 
-  const supabase = createClientServer()
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .select(`
-      *,
-      hotel:hotel_id (
-        id,
-        name,
-        image_url,
-        contact_phone,
-        contact_whatsapp
-      )
-    `)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("Error fetching bookings:", error)
-    return []
-  }
-
-  return data || []
+  return result.rows
 }
 
-// Create a booking
-export async function createBooking(formData: FormData) {
-  const user = await getCurrentUser()
+export async function getAllBookings() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
 
-  if (!user) {
-    return { success: false, error: "Not authenticated" }
-  }
+  const result = await query(
+    `SELECT b.*, h.name as hotel_name, h.address,
+            p.full_name, p.email, p.phone
+     FROM bookings b
+     JOIN hotels h ON b.hotel_id = h.id
+     JOIN profiles p ON b.user_id = p.id
+     ORDER BY b.created_at DESC`
+  )
 
-  const hotelId = formData.get("hotelId") as string
-  const roomType = formData.get("roomType") as string
-  const checkInDate = formData.get("checkInDate") as string
-  const checkOutDate = formData.get("checkOutDate") as string
-  const totalNights = Number(formData.get("totalNights"))
-  const pricePerNight = Number(formData.get("pricePerNight"))
-  const totalAmount = Number(formData.get("totalAmount"))
-  const specialRequests = formData.get("specialRequests") as string
-
-  const supabase = createClientServer()
-
-  // Create the booking record
-  const { data, error } = await supabase
-    .from("bookings")
-    .insert({
-      user_id: user.id,
-      hotel_id: hotelId,
-      room_type: roomType,
-      check_in_date: checkInDate,
-      check_out_date: checkOutDate,
-      total_nights: totalNights,
-      price_per_night: pricePerNight,
-      total_amount: totalAmount,
-      special_requests: specialRequests,
-      status: "pending",
-      payment_status: "pending",
-    })
-    .select()
-    .single()
-
-  if (error) {
-    console.error("Error creating booking:", error)
-    return { success: false, error: error.message }
-  }
-
-  // Update available rooms count
-  const { error: updateError } = await supabase.rpc("decrement_available_rooms", {
-    hotel_id_param: hotelId,
-  })
-
-  if (updateError) {
-    console.error("Error updating available rooms:", updateError)
-    // We don't return an error here as the booking was created successfully
-  }
-
-  return { success: true, bookingId: data.id }
+  return result.rows
 }
 

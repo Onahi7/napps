@@ -1,5 +1,4 @@
 "use client"
-
 import type React from "react"
 import { signIn } from "next-auth/react"
 import { useState } from "react"
@@ -10,47 +9,33 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Loader2, Shield } from "lucide-react"
-import { createClientBrowser } from "@/lib/supabase"
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
-
     try {
-      // First check if the email belongs to an admin
-      const supabase = createClientBrowser()
-      const { data: adminProfile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("email", email)
-        .single()
-
-      if (!adminProfile || adminProfile.role !== "admin") {
-        throw new Error("Invalid admin credentials")
-      }
-
-      // Use admin-specific login flow
       const result = await signIn("credentials", {
         identifier: email,
-        password: password,
+        password,
         loginMethod: "email",
-        isAdmin: "true", // Set the admin flag
+        isAdmin: "true",
         redirect: false,
       })
 
       if (result?.error) {
-        throw new Error("Invalid credentials")
+        throw new Error("Invalid admin credentials")
       }
 
       router.push("/admin/dashboard")
+      router.refresh()
     } catch (err: any) {
       setError(err.message || "An error occurred during sign in")
     } finally {
@@ -69,7 +54,6 @@ export default function AdminLoginPage() {
           <h1 className="text-2xl font-semibold tracking-tight">NAPPS Conference</h1>
           <p className="text-sm text-muted-foreground">Admin Access</p>
         </div>
-
         <Card>
           <form onSubmit={handleSubmit}>
             <CardHeader>
@@ -90,6 +74,7 @@ export default function AdminLoginPage() {
                   onChange={(e) => setEmail(e.target.value)} 
                   required 
                   className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -101,6 +86,7 @@ export default function AdminLoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                  disabled={isLoading}
                 />
               </div>
             </CardContent>

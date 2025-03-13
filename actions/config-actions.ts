@@ -1,97 +1,147 @@
-"use server"
+'use server'
 
-import { createClientServer } from "@/lib/supabase"
-import { revalidatePath } from "next/cache"
-import { isAdmin } from "@/lib/auth"
+import { query } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
+import { revalidatePath } from 'next/cache'
+import { CacheService } from '@/lib/cache'
 
-// Get a config value by key
+const cache = CacheService.getInstance()
+const CONFIG_CACHE_PREFIX = 'config:'
+const CONFIG_CACHE_TTL = 300 // 5 minutes
+
 export async function getConfig(key: string) {
-  const supabase = createClientServer()
+  // Try cache first
+  const cached = await cache.get(`${CONFIG_CACHE_PREFIX}${key}`)
+  if (cached) return cached
 
-  const { data, error } = await supabase.from("config").select("value").eq("key", key).single()
+  // Fetch from database
+  const result = await query(
+    'SELECT value FROM config WHERE key = $1',
+    [key]
+  )
 
-  if (error) {
-    console.error(`Error fetching config for key ${key}:`, error)
-    return null
+  const value = result.rows[0]?.value
+  if (value) {
+    // Cache the result
+    await cache.set(`${CONFIG_CACHE_PREFIX}${key}`, value, CONFIG_CACHE_TTL)
   }
 
-  return data.value
+  return value
 }
 
-// Get a config value by key (alias for getConfigByKey for backward compatibility)
-export async function getConfigByKey(key: string) {
-  return getConfig(key)
-}
+// Alias for getConfig to maintain compatibility with existing imports
+export const getConfigByKey = getConfig;
 
-// Update a config value
 export async function updateConfig(key: string, value: any) {
-  try {
-    // Only admins can update config
-    const adminCheck = await isAdmin()
-    if (!adminCheck) {
-      return { success: false, error: "Unauthorized" }
-    }
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
 
-    const supabase = createClientServer()
-
-    // Check if config exists
-    const { data: existingConfig } = await supabase.from("config").select("*").eq("key", key).single()
-
-    if (existingConfig) {
-      // Update existing config
-      const { error } = await supabase
-        .from("config")
-        .update({ value, updated_at: new Date().toISOString() })
-        .eq("key", key)
-
-      if (error) {
-        console.error(`Error updating config for key ${key}:`, error)
-        return { success: false, error: error.message }
-      }
-    } else {
-      // Insert new config
-      const { error } = await supabase.from("config").insert({ key, value, created_at: new Date().toISOString() })
-
-      if (error) {
-        console.error(`Error creating config for key ${key}:`, error)
-        return { success: false, error: error.message }
-      }
-    }
-
-    // Revalidate paths that might use this config
-    revalidatePath("/admin/settings")
-    revalidatePath("/participant/dashboard")
-    revalidatePath("/payment")
-
-    return { success: true }
-  } catch (error: any) {
-    console.error(`Error in updateConfig for key ${key}:`, error)
-    return { success: false, error: error.message || "Failed to update config" }
+  // Validate admin access
+  const profile = await query(
+    'SELECT role FROM profiles WHERE id = $1',
+    [session.user.id]
+  )
+  if (profile.rows[0]?.role !== 'admin') {
+    throw new Error('Unauthorized: Admin access required')
   }
+
+  // Update config
+  await query(
+    `INSERT INTO config (key, value)
+     VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = $2`,
+    [key, JSON.stringify(value)]
+  )
+
+  // Invalidate cache
+  await cache.del(`${CONFIG_CACHE_PREFIX}${key}`)
+
+  revalidatePath('/admin/settings')
+  return { success: true }
 }
 
-// Initialize default config values
+export async function getAllConfig() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  const cached = await cache.get(`${CONFIG_CACHE_PREFIX}all`)
+  if (cached) return cached
+
+  const result = await query(
+    'SELECT key, value, description FROM config ORDER BY key'
+  )
+
+  const config = result.rows.map(row => ({
+    ...row,
+    value: typeof row.value === 'string' ? JSON.parse(row.value) : row.value
+  }))
+
+  await cache.set(`${CONFIG_CACHE_PREFIX}all`, config, CONFIG_CACHE_TTL)
+  return config
+}
+
+export async function getConferenceConfig() {
+  // Get essential conference settings with caching
+  return cache.cached('conference_config', async () => {
+    const result = await query(`
+      SELECT key, value 
+      FROM config 
+      WHERE key IN (
+        'conference_name',
+        'conference_date',
+        'conference_venue',
+        'conference_theme',
+        'registrationAmount'
+      )
+    `)
+
+    const config: Record<string, any> = {}
+    for (const row of result.rows) {
+      config[row.key] = typeof row.value === 'string' 
+        ? JSON.parse(row.value) 
+        : row.value
+    }
+
+    return config
+  }, 3600) // Cache for 1 hour
+}
+
 export async function initializeDefaultConfig() {
-  const defaultConfig = {
-    registrationAmount: 20000,
-    registrationAmountFormatted: "₦20,000",
-    conferenceDate: "May 15-17, 2025",
-    conferenceLocation: "Abuja, Nigeria",
-    conferenceVenue: "International Conference Center, Abuja",
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  // Validate admin access
+  const profile = await query(
+    'SELECT role FROM profiles WHERE id = $1',
+    [session.user.id]
+  )
+  if (profile.rows[0]?.role !== 'admin') {
+    throw new Error('Unauthorized: Admin access required')
   }
 
-  const supabase = createClientServer()
+  const defaultConfig = {
+    registrationAmount: 15000,
+    conference_name: '6th Annual NAPPS North Central Zonal Education Summit 2025',
+    conference_date: 'May 21-22, 2025',
+    conference_venue: 'Lafia City Hall, Lafia',
+    conference_theme: 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE',
+    payment_split_code: null
+  }
 
   for (const [key, value] of Object.entries(defaultConfig)) {
-    // Check if config exists
-    const { data } = await supabase.from("config").select("*").eq("key", key).single()
-
-    if (!data) {
-      // Insert default config
-      await supabase.from("config").insert({ key, value, created_at: new Date().toISOString() })
-    }
+    await query(
+      `INSERT INTO config (key, value)
+       VALUES ($1, $2)
+       ON CONFLICT (key) DO NOTHING`,
+      [key, JSON.stringify(value)]
+    )
   }
 
+  // Clear all config cache
+  await cache.invalidatePattern(`${CONFIG_CACHE_PREFIX}*`)
+
+  revalidatePath('/admin/settings')
   return { success: true }
 }
 

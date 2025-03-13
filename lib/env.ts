@@ -1,51 +1,32 @@
-// Environment variable types
-type EnvVars = {
-  NEXT_PUBLIC_SUPABASE_URL: string
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: string
-  PAYSTACK_SECRET_KEY: string
-  PAYSTACK_SPLIT_CODE: string
-  SUPABASE_SERVICE_ROLE_KEY: string
-  NEXT_PUBLIC_APP_URL: string
-}
+import { z } from "zod"
+import { createEnv } from "@t3-oss/env-nextjs"
 
-// Environment variable validation
-export const env: EnvVars = {
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-  PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY || "",
-  PAYSTACK_SPLIT_CODE: process.env.PAYSTACK_SPLIT_CODE || "",
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
-}
-
-// Validate environment variables
-export function validateEnv() {
-  const isServer = typeof window === "undefined"
-  const isDev = process.env.NODE_ENV !== "production"
-
-  // Only validate on server in development
-  if (!isServer || !isDev) return
-
-  const requiredVars: Record<keyof EnvVars, string> = {
-    NEXT_PUBLIC_SUPABASE_URL: "Supabase project URL",
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: "Supabase anonymous key",
-    PAYSTACK_SECRET_KEY: "Paystack secret key",
-    PAYSTACK_SPLIT_CODE: "Paystack split code for payment distribution",
-    SUPABASE_SERVICE_ROLE_KEY: "Supabase service role key",
-    NEXT_PUBLIC_APP_URL: "Application URL",
-  }
-
-  const missingVars = Object.entries(requiredVars).filter(([key]) => !env[key as keyof EnvVars])
-
-  if (missingVars.length > 0) {
-    const missingVarsList = missingVars
-      .map(([key, desc]) => `\n  - ${key}: ${desc}`)
-      .join("")
-      
-    throw new Error(
-      `Missing required environment variables:${missingVarsList}\n\nMake sure these are set in your .env file or in your deployment environment.`
-    )
-  }
-}
+export const env = createEnv({
+  server: {
+    DATABASE_URL: z.string().url(),
+    DATABASE_SSL: z.boolean().default(true),
+    REDIS_HOST: z.string().default('localhost'),
+    REDIS_PORT: z.string().default('6379'),
+    REDIS_PASSWORD: z.string().optional(),
+    NEXTAUTH_SECRET: z.string(),
+    NEXTAUTH_URL: z.string().url(),
+    PAYSTACK_SECRET_KEY: z.string(),
+  },
+  client: {
+    NEXT_PUBLIC_APP_URL: z.string().url(),
+    NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string(),
+  },
+  runtimeEnv: {
+    DATABASE_URL: process.env.DATABASE_URL,
+    DATABASE_SSL: process.env.DATABASE_SSL === 'true',
+    REDIS_HOST: process.env.REDIS_HOST,
+    REDIS_PORT: process.env.REDIS_PORT,
+    REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
+    NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+  },
+})
 

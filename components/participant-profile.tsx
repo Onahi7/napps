@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function ParticipantProfile() {
-  const { user, profile, isLoading } = useAuth()
+  const { user, profile, loading } = useAuth()
   const [isSaving, setIsSaving] = useState(false)
   const [profileData, setProfileData] = useState({
     firstName: "",
@@ -92,20 +92,19 @@ export default function ParticipantProfile() {
 
       setIsSaving(true)
       const result = await updateProfile({
-        firstName: profileData.firstName,
-        lastName: profileData.lastName,
+        full_name: `${profileData.firstName} ${profileData.lastName}`,
         email: profileData.email,
         phone: profileData.phone,
         organization: profileData.organization,
         bio: profileData.bio,
-        dietaryRequirements: profileData.dietaryRequirements,
-        schoolName: profileData.schoolName,
-        schoolAddress: profileData.schoolAddress,
-        schoolCity: profileData.schoolCity,
-        schoolState: profileData.schoolState,
-        schoolType: profileData.schoolType,
-        nappsPosition: profileData.nappsPosition,
-        nappsChapter: profileData.nappsChapter
+        dietary_requirements: profileData.dietaryRequirements,
+        school_name: profileData.schoolName,
+        school_address: profileData.schoolAddress,
+        school_city: profileData.schoolCity,
+        school_state: profileData.schoolState,
+        school_type: profileData.schoolType,
+        napps_position: profileData.nappsPosition,
+        napps_chapter: profileData.nappsChapter
       })
 
       if (result.success) {
@@ -123,9 +122,9 @@ export default function ParticipantProfile() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <DashboardHeader />
+      <DashboardHeader role="participant" title="Profile" />
       <div className="flex flex-1">
-        <DashboardSidebar />
+        <DashboardSidebar role="participant" />
         <div className="flex-1 p-6 md:p-8">
           <div className="mx-auto max-w-4xl space-y-8">
             <div className="flex items-center justify-between">
@@ -146,7 +145,7 @@ export default function ParticipantProfile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">First Name</Label>
-                        {isLoading ? (
+                        {loading ? (
                           <Skeleton className="h-10 w-full" />
                         ) : (
                           <Input
@@ -161,7 +160,7 @@ export default function ParticipantProfile() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">Last Name</Label>
-                        {isLoading ? (
+                        {loading ? (
                           <Skeleton className="h-10 w-full" />
                         ) : (
                           <Input
@@ -177,7 +176,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Input
@@ -193,7 +192,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Input
@@ -208,7 +207,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="bio">Bio</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-24 w-full" />
                       ) : (
                         <Textarea
@@ -223,7 +222,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="dietaryRequirements">Dietary Requirements</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Input
@@ -250,7 +249,7 @@ export default function ParticipantProfile() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="schoolName">School Name</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Input
@@ -265,7 +264,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="schoolAddress">School Address</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Input
@@ -281,7 +280,7 @@ export default function ParticipantProfile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="schoolCity">City</Label>
-                        {isLoading ? (
+                        {loading ? (
                           <Skeleton className="h-10 w-full" />
                         ) : (
                           <Input
@@ -296,7 +295,7 @@ export default function ParticipantProfile() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="schoolState">State</Label>
-                        {isLoading ? (
+                        {loading ? (
                           <Skeleton className="h-10 w-full" />
                         ) : (
                           <Select 
@@ -351,7 +350,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="schoolType">School Type</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Select 
@@ -386,7 +385,7 @@ export default function ParticipantProfile() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="nappsPosition">NAPPS Position</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Select 
@@ -412,7 +411,7 @@ export default function ParticipantProfile() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="nappsChapter">NAPPS Chapter</Label>
-                      {isLoading ? (
+                      {loading ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Input

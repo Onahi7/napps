@@ -7,10 +7,12 @@ declare module "next-auth" {
       role: string
       phone: string
       payment_status: string
+      accreditation_status: string
       state: string
       lga: string
       chapter: string
       organization: string
+      position: string
       full_name: string
     } & DefaultSession["user"]
   }
@@ -20,10 +22,12 @@ declare module "next-auth" {
     role: string
     phone: string
     payment_status: string
+    accreditation_status: string
     state: string
     lga: string
     chapter: string
     organization: string
+    position: string
     full_name: string
   }
 }
@@ -34,10 +38,12 @@ declare module "next-auth/jwt" {
     role: string
     phone: string
     payment_status: string
+    accreditation_status: string
     state: string
     lga: string
     chapter: string
     organization: string
+    position: string
     full_name: string
   }
 }

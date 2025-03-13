@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Download, Share2, QrCode, Phone, CheckSquare, Coffee } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { Loader2 } from "lucide-react";
 import { useSession, signIn, signOut } from 'next-auth/react';
 
 export default function ParticipantQRCode() {
@@ -235,4 +236,3 @@ export default function ParticipantQRCode() {
     </div>
   )
 }
-

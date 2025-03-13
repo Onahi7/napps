@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
@@ -12,6 +11,28 @@ import Link from "next/link"
 import { useAuth } from "@/lib/auth-hooks"
 import { getScansByValidator, getValidatorAssignments } from "@/actions/scan-actions"
 
+interface Assignment {
+  id: string
+  type: 'breakfast' | 'lunch' | 'dinner' | 'accreditation'
+  status: 'pending' | 'active' | 'completed'
+  location: string
+  date: string
+  time: string
+}
+
+interface Scan {
+  id: string
+  user_id: string
+  scanned_by: string
+  scan_type: string
+  location?: string
+  notes?: string
+  created_at: string
+  full_name?: string
+  email?: string
+  phone?: string
+}
+
 export default function ValidatorDashboard() {
   const { user, profile } = useAuth()
   const [scanData, setScanData] = useState({
@@ -22,97 +43,49 @@ export default function ValidatorDashboard() {
     lunchScans: 0,
     accreditationScans: 0,
   })
-  const [assignments, setAssignments] = useState([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setIsLoading(true)
-        // In a real app, these would fetch data from your API
-        // For this mock, we'll use dummy data
-        
-        // Mock scan data
-        setScanData({
-          todayScans: 42,
-          totalScans: 156,
-          breakfastScans: 18,
-          lunchScans: 15,
-          dinnerScans: 9,
-          accreditationScans: 0,
-        })
-
-        // Mock assignments
-        setAssignments([
-          {
-            id: 1,
-            type: "breakfast",
-            location: "Main Hall",
-            date: "2025-05-21",
-            time: "07:00 - 09:00",
-            status: "completed",
-          },
-          {
-            id: 2,
-            type: "lunch",
-            location: "Dining Area",
-            date: "2025-05-21",
-            time: "12:30 - 14:30",
-            status: "completed",
-          },
-          {
-            id: 3,
-            type: "dinner",
-            location: "Dining Area",
-            date: "2025-05-21",
-            time: "18:30 - 20:30",
-            status: "active",
-          },
-          {
-            id: 4,
-            type: "breakfast",
-            location: "Main Hall",
-            date: "2025-05-22",
-            time: "07:00 - 09:00",
-            status: "upcoming",
-          },
-        ])
-      } catch (error) {
-        console.error("Error loading dashboard data:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadData()
-  }, [])
-
-  const refreshData = () => {
-    // In a real app, this would refresh the data from your API
-    // For this mock, we'll just simulate a refresh
+  const refreshData = async () => {
+    if (!user?.id) return
     setIsLoading(true)
-    setTimeout(() => {
-      setScanData((prev) => ({
-        ...prev,
-        todayScans: prev.todayScans + 3,
-        totalScans: prev.totalScans + 3,
-        dinnerScans: prev.dinnerScans + 3,
-      }))
+    try {
+      const [scans, newAssignments] = await Promise.all([
+        getScansByValidator(user.id),
+        getValidatorAssignments(user.id)
+      ])
+      // Calculate scan statistics
+      const today = new Date().toISOString().split('T')[0]
+      const todayScans = scans.filter((scan: Scan) => scan.created_at.startsWith(today)).length
+      setScanData({
+        todayScans,
+        totalScans: scans.length,
+        breakfastScans: scans.filter((scan: Scan) => scan.scan_type === 'breakfast').length,
+        lunchScans: scans.filter((scan: Scan) => scan.scan_type === 'lunch').length,
+        dinnerScans: scans.filter((scan: Scan) => scan.scan_type === 'dinner').length,
+        accreditationScans: scans.filter((scan: Scan) => scan.scan_type === 'accreditation').length,
+      })
+      setAssignments(newAssignments)
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
+
+  useEffect(() => {
+    refreshData()
+  }, [user?.id])
 
   return (
     <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
       <DashboardSidebar role="validator" />
       <div className="flex flex-col">
-        <DashboardHeader heading="Validator Dashboard" text="Monitor your validation activities">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 gap-1" onClick={refreshData} disabled={isLoading}>
-              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">Refresh</span>
-            </Button>
-          </div>
+        <DashboardHeader role="validator" title="Validator Dashboard">
+          <Button variant="outline" size="sm" className="h-8 gap-1" onClick={refreshData} disabled={isLoading}>
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">Refresh</span>
+          </Button>
         </DashboardHeader>
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

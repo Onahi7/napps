@@ -1,7 +1,5 @@
 "use client"
-
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2, Save } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getConfigByKey, updateConfig } from "@/actions/config-actions"
-import { formatCurrency } from "@/lib/config-service"
+import { formatCurrency } from "@/lib/format-utils"
 
 export default function SettingsPage() {
   const { toast } = useToast()
@@ -55,16 +53,14 @@ export default function SettingsPage() {
     try {
       // Update registration amount
       const result = await updateConfig("registrationAmount", registrationAmount)
-
       if (!result.success) {
-        throw new Error(result.error || "Failed to update registration amount")
+        throw new Error("Failed to update registration amount")
       }
 
       // Also update the formatted amount
       const formattedResult = await updateConfig("registrationAmountFormatted", formattedAmount)
-
       if (!formattedResult.success) {
-        throw new Error(formattedResult.error || "Failed to update formatted amount")
+        throw new Error("Failed to update formatted amount")
       }
 
       toast({

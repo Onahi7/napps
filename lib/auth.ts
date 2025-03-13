@@ -1,74 +1,103 @@
-"use server"
-import { createClientServer } from "@/lib/supabase"
-import type { Database } from "@/lib/database.types"
+'use server'
 
-// Types
-export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
+import { query } from './db'
+import { compare, hash } from 'bcrypt'
 
-// Get current logged in user
-export async function getCurrentUser() {
-  const supabase = createClientServer()
-
-  const { data, error } = await supabase.auth.getUser()
-
-  if (error || !data?.user) {
-    console.error("Error getting user:", error)
-    return null
-  }
-
-  return data.user
+export interface Profile {
+  id: string
+  email: string
+  full_name: string
+  phone: string
+  role: string
+  state?: string
+  lga?: string
+  chapter?: string
+  organization?: string
+  position?: string
+  payment_status: string
+  accreditation_status: string
 }
 
-// Get current user profile
-export async function getCurrentProfile() {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    return null
-  }
-
-  const supabase = createClientServer()
-
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single()
-
-  if (error || !data) {
-    console.error("Error getting profile:", error)
-    return null
-  }
-
-  return data as Profile
+export async function createUser(userData: {
+  email: string
+  password: string
+  full_name: string
+  phone: string
+}) {
+  const hashedPassword = await hash(userData.password, 10)
+  return await query(
+    `INSERT INTO users (email, password_hash, created_at, updated_at)
+     VALUES ($1, $2, NOW(), NOW())
+     RETURNING id`,
+    [userData.email, hashedPassword]
+  ).then(async (result) => {
+    const userId = result.rows[0].id
+    await query(
+      `INSERT INTO profiles (id, email, full_name, phone, role, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'participant', NOW(), NOW())`,
+      [userId, userData.email, userData.full_name, userData.phone]
+    )
+    return userId
+  })
 }
 
-// Check if user has admin role
-export async function isAdmin() {
-  const profile = await getCurrentProfile()
-  return profile?.role === "admin"
-}
-
-// Check if user has validator role
-export async function isValidator() {
-  const profile = await getCurrentProfile()
-  return profile?.role === "validator"
-}
-
-// Check if user has participant role
-export async function isParticipant() {
-  const profile = await getCurrentProfile()
-  return profile?.role === "participant"
-}
-
-// Require a specific role
-export async function requireRole(role: string) {
-  const profile = await getCurrentProfile()
-
-  if (!profile) {
-    throw new Error("Authentication required")
+export async function verifyCredentials(identifier: string, password: string, isEmailLogin: boolean = true) {
+  const result = await query(
+    `SELECT u.id, u.password_hash, p.*
+     FROM users u
+     JOIN profiles p ON p.id = u.id
+     WHERE ${isEmailLogin ? 'u.email = $1' : 'p.phone = $1'}`,
+    [identifier]
+  )
+  
+  if (!result.rows[0]) return null
+  
+  // For non-admin regular users, skip password check
+  if (!password) {
+    return result.rows[0]
   }
+  
+  // For admin users, verify password
+  const isValid = await compare(password, result.rows[0].password_hash)
+  if (!isValid) return null
+  
+  return result.rows[0]
+}
 
-  if (profile.role !== role) {
-    throw new Error(`Requires ${role} role`)
+export async function getCurrentProfile(userId: string): Promise<Profile | null> {
+  const result = await query(
+    `SELECT id, email, full_name, phone, role, state, lga, chapter, 
+            organization, position, payment_status, accreditation_status
+     FROM profiles
+     WHERE id = $1`,
+    [userId]
+  )
+  return result.rows[0] || null
+}
+
+export async function isAdmin(userId: string) {
+  const result = await query(
+    'SELECT role FROM profiles WHERE id = $1',
+    [userId]
+  )
+  return result.rows[0]?.role === 'admin'
+}
+
+export async function isValidator(userId: string) {
+  const result = await query(
+    'SELECT role FROM profiles WHERE id = $1',
+    [userId]
+  )
+  return result.rows[0]?.role === 'validator'
+}
+
+export async function requireRole(userId: string, requiredRole: string) {
+  const result = await query(
+    'SELECT role FROM profiles WHERE id = $1',
+    [userId]
+  )
+  if (!result.rows[0] || result.rows[0].role !== requiredRole) {
+    throw new Error('Unauthorized')
   }
-
-  return profile
 }
 

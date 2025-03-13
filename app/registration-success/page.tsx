@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CheckCircle, Loader2 } from "lucide-react"
-import { createClientBrowser } from "@/lib/supabase"
+import { getMyProfile } from "@/actions/profile-actions"
 
 export default function RegistrationSuccessPage() {
   const router = useRouter()
@@ -21,16 +21,12 @@ export default function RegistrationSuccessPage() {
         router.push("/register")
         return
       }
-
       try {
-        const supabase = createClientBrowser()
-        const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
-
-        if (error || !data) {
-          throw error
+        const profile = await getMyProfile()
+        if (!profile) {
+          throw new Error("Profile not found")
         }
-
-        setUserData(data)
+        setUserData(profile)
       } catch (error) {
         console.error("Error fetching user data:", error)
       } finally {
@@ -44,28 +40,10 @@ export default function RegistrationSuccessPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  if (!userData) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Error</CardTitle>
-            <CardDescription>User information not found</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>We couldn't find your registration information. Please try registering again.</p>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={() => router.push("/register")} className="w-full">
-              Back to Registration
-            </Button>
-          </CardFooter>
-        </Card>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-napps-gold" />
+          <p className="text-muted-foreground">Loading registration details...</p>
+        </div>
       </div>
     )
   }
@@ -75,51 +53,53 @@ export default function RegistrationSuccessPage() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
-
-      <Card className="w-full max-w-md">
+      <Card className="mx-auto w-full max-w-lg">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
-            <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+            <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
           </div>
           <CardTitle>Registration Successful!</CardTitle>
-          <CardDescription>Your registration for the NAPPS Conference has been completed</CardDescription>
+          <CardDescription>Your registration has been completed successfully.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-md bg-muted p-4 space-y-2">
-            <div className="flex justify-between">
-              <span className="font-medium">Participant ID:</span>
-              <span>{userData.id.substring(0, 8).toUpperCase()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Name:</span>
-              <span>{userData.full_name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Phone:</span>
-              <span>{userData.phone}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Payment Status:</span>
-              <span className={userData.payment_status === "paid" ? "text-green-600" : "text-amber-600"}>
-                {userData.payment_status === "paid" ? "Paid" : "Pending"}
-              </span>
+          <div className="rounded-lg bg-muted p-4">
+            <h3 className="mb-2 font-medium">Registration Details:</h3>
+            <div className="space-y-2 text-sm">
+              <p>
+                <span className="text-muted-foreground">Name:</span>{" "}
+                {userData?.full_name}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Email:</span>{" "}
+                {userData?.email}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Phone:</span>{" "}
+                {userData?.phone}
+              </p>
             </div>
           </div>
 
-          <div className="text-center text-sm">
-            <p>Please save your Participant ID for future reference.</p>
-            <p className="mt-2">You can now login to your dashboard using your phone number.</p>
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/50 dark:bg-yellow-900/20">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              Please complete your payment to activate your registration. You can make the payment from your dashboard.
+            </p>
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col space-y-4">
-          <Button onClick={() => router.push("/login")} className="w-full">
-            Go to Login
+        <CardFooter className="flex flex-col gap-4">
+          <Button
+            className="w-full bg-napps-gold text-black hover:bg-napps-gold/90"
+            onClick={() => router.push("/participant/dashboard")}
+          >
+            Go to Dashboard
           </Button>
-          {userData.payment_status !== "paid" && (
-            <Button onClick={() => router.push("/payment")} variant="outline" className="w-full">
-              Complete Payment
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push("/")}
+          >
+            Return to Home
+          </Button>
         </CardFooter>
       </Card>
     </div>

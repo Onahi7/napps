@@ -31,7 +31,7 @@ import {
   SidebarMenuButton,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { useAuth } from "@/lib/auth-hooks"
+import { useAuth } from "@/components/auth-provider"
 
 interface DashboardSidebarProps {
   role: "admin" | "participant" | "validator"
@@ -39,7 +39,7 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ role }: DashboardSidebarProps) {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { signOut } = useAuth()
 
   const adminMenuItems = [
     { href: "/admin/dashboard", icon: Home, label: "Dashboard" },
@@ -104,7 +104,7 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <button
-              onClick={() => logout()}
+              onClick={() => signOut()}
               className="flex w-full items-center gap-3 text-destructive"
             >
               <LogOut className="h-4 w-4" />

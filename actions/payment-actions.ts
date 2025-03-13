@@ -1,221 +1,131 @@
-"use server"
+'use server'
+import { query, withTransaction } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
+import { getConfig } from '@/lib/config-service'
+import { revalidatePath } from 'next/cache'
 
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth"
-import { createClientServer } from "@/lib/supabase"
-import { env } from "@/lib/env"
-import { getServerConfig } from "@/lib/server-config"
-import { initiatePayment, verifyPayment } from "@/lib/paystack"
-import { revalidatePath } from "next/cache"
-
-// Initialize payment for registration
-export async function initializeRegistrationPayment() {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" }
-  }
-
-  const profile = await getCurrentProfile()
-
-  if (!profile) {
-    return { success: false, error: "Profile not found" }
-  }
-
-  // Check if already paid
-  if (profile.payment_status === "paid") {
-    return { success: false, error: "You have already paid for this conference" }
-  }
-
-  // Get registration amount and split code from config
-  const registrationAmount = await getServerConfig<number>("registrationAmount", 15000)
-  const splitCode = await getServerConfig<string | null>("payment_split_code", null)
+export async function initializePayment(amount: number) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
 
   try {
-    // Create payment with split configuration
-    const payment = await initiatePayment({
-      email: profile.email || `${profile.phone}@napps.org`, // Fallback to generated email if null
-      amount: registrationAmount * 100, // Paystack requires amount in kobo
-      metadata: {
-        user_id: user.id,
-        full_name: profile.full_name,
-        payment_type: "registration",
-      },
-      callback_url: `${env.NEXT_PUBLIC_APP_URL}/payment/verify`,
-      ...(splitCode && { split_code: splitCode })
-    })
+    const profile = await query(
+      'SELECT payment_status FROM profiles WHERE id = $1',
+      [session.user.id]
+    )
 
-    if (!payment.authorization_url) {
-      return { success: false, error: "Failed to initialize payment" }
+    if (profile.rows[0]?.payment_status === 'completed') {
+      throw new Error('Payment already completed')
     }
 
-    // Update profile with payment reference
-    const supabase = await createClientServer()
+    const paymentReference = `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`
+    
+    await query(
+      `UPDATE profiles 
+       SET payment_reference = $1, 
+           payment_amount = $2,
+           payment_status = 'pending',
+           updated_at = NOW()
+       WHERE id = $3`,
+      [paymentReference, amount, session.user.id]
+    )
 
-    await supabase
-      .from("profiles")
-      .update({
-        payment_reference: payment.reference,
-        payment_amount: registrationAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id)
-
-    return {
-      success: true,
-      authorizationUrl: payment.authorization_url,
-      reference: payment.reference,
-    }
+    return { reference: paymentReference }
   } catch (error: any) {
-    console.error("Payment initialization error:", error)
-    return { success: false, error: error.message || "Payment initialization failed" }
+    console.error('Payment initialization error:', error)
+    throw error
   }
 }
 
-// Verify registration payment
+export async function verifyPayment(reference: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  return await withTransaction(async (client) => {
+    // Get profile and verify payment status
+    const profile = await client.query(
+      'SELECT payment_status, payment_reference FROM profiles WHERE id = $1',
+      [session.user.id]
+    )
+
+    if (!profile.rows[0]) throw new Error('Profile not found')
+    if (profile.rows[0].payment_reference !== reference) {
+      throw new Error('Invalid payment reference')
+    }
+    if (profile.rows[0].payment_status === 'completed') {
+      return { verified: true }
+    }
+
+    // Update payment status
+    await client.query(
+      `UPDATE profiles 
+       SET payment_status = 'completed',
+           payment_date = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [session.user.id]
+    )
+
+    revalidatePath('/payment')
+    revalidatePath('/participant/dashboard')
+    return { verified: true }
+  })
+}
+
+export async function getPaymentStatus() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return null
+
+  const result = await query(
+    `SELECT payment_status, payment_reference, payment_amount, payment_date 
+     FROM profiles 
+     WHERE id = $1`,
+    [session.user.id]
+  )
+
+  return result.rows[0] || null
+}
+
+export async function getRegistrationAmount() {
+  return getConfig('registrationAmount') || 15000
+}
+
+// Function to verify registration payment
 export async function verifyRegistrationPayment(reference: string) {
-  try {
-    // Verify payment with Paystack
-    const paymentData = await verifyPayment(reference)
-
-    // Update the profile with payment status
-    const supabase = await createClientServer()
-
-    if (paymentData.status === "success") {
-      await supabase
-        .from("profiles")
-        .update({
-          payment_status: "paid",
-          payment_date: paymentData.paid_at || new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("payment_reference", reference)
-
-      revalidatePath("/participant/dashboard")
-      return { success: true, status: "paid" }
-    } else {
-      await supabase
-        .from("profiles")
-        .update({
-          payment_status: "failed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("payment_reference", reference)
-
-      return { success: true, status: "failed" }
-    }
-  } catch (error: any) {
-    console.error("Error verifying payment:", error)
-    return { success: false, error: error.message }
-  }
+  return verifyPayment(reference);
 }
 
-// Initialize hotel booking payment
-export async function initializeHotelBookingPayment(
-  hotelId: string,
-  checkInDate: string,
-  checkOutDate: string,
-  totalAmount: number,
-) {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    return { success: false, error: "Not authenticated" }
-  }
-
-  const profile = await getCurrentProfile()
-
-  if (!profile) {
-    return { success: false, error: "Profile not found" }
-  }
-
-  // Generate a unique reference
-  const reference = `HOTEL-${Date.now()}-${user.id.substring(0, 8)}`
-
-  // Get split code from config
-  const splitCode = await getServerConfig<string | null>("payment_split_code", null)
-
-  try {
-    // Initialize payment with Paystack
-    const paymentData = await initiatePayment({
-      email: profile.email || `${profile.phone}@napps.org`, // Fallback to generated email if null
-      amount: totalAmount * 100,
-      reference: reference,
-      metadata: {
-        userId: user.id,
-        paymentType: "hotel",
-        hotelId,
-        checkInDate,
-        checkOutDate,
-      },
-      callback_url: `${env.NEXT_PUBLIC_APP_URL}/payment/verify`,
-      ...(splitCode && { split_code: splitCode })
-    })
-
-    // Create booking record
-    const supabase = await createClientServer()
-    const { error } = await supabase.from("bookings").insert({
-      user_id: user.id,
-      hotel_id: hotelId,
-      check_in_date: checkInDate,
-      check_out_date: checkOutDate,
-      status: "pending",
-      payment_reference: reference,
-      payment_status: "pending",
-      total_amount: totalAmount,
-    })
-
-    if (error) {
-      console.error("Error creating booking:", error)
-      return { success: false, error: error.message }
+// Function to verify hotel booking payment
+export async function verifyHotelBookingPayment(reference: string, bookingId: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+  
+  return await withTransaction(async (client) => {
+    // Verify the booking exists and belongs to the user
+    const booking = await client.query(
+      'SELECT id, payment_status FROM bookings WHERE id = $1 AND user_id = $2',
+      [bookingId, session.user.id]
+    )
+    
+    if (!booking.rows[0]) throw new Error('Booking not found')
+    
+    if (booking.rows[0].payment_status === 'completed') {
+      return { verified: true }
     }
-
-    return {
-      success: true,
-      authorizationUrl: paymentData.authorization_url,
-      reference: paymentData.reference,
-    }
-  } catch (error: any) {
-    console.error("Error initializing hotel payment:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-// Verify hotel booking payment
-export async function verifyHotelBookingPayment(reference: string) {
-  try {
-    // Verify payment with Paystack
-    const paymentData = await verifyPayment(reference)
-
-    // Update the booking with payment status
-    const supabase = await createClientServer()
-
-    if (paymentData.status === "success") {
-      await supabase
-        .from("bookings")
-        .update({
-          payment_status: "paid",
-          status: "confirmed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("payment_reference", reference)
-
-      revalidatePath("/participant/accommodation")
-      return { success: true, status: "paid" }
-    } else {
-      await supabase
-        .from("bookings")
-        .update({
-          payment_status: "failed",
-          status: "cancelled",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("payment_reference", reference)
-
-      return { success: true, status: "failed" }
-    }
-  } catch (error: any) {
-    console.error("Error verifying hotel payment:", error)
-    return { success: false, error: error.message }
-  }
+    
+    // Update booking payment status
+    await client.query(
+      `UPDATE bookings 
+       SET payment_status = 'completed',
+           payment_date = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [bookingId]
+    )
+    
+    revalidatePath('/participant/accommodation')
+    return { verified: true }
+  })
 }
 

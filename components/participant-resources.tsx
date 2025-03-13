@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { FileText, Download, Search, Eye, BookOpen, Video, File } from "lucide-react"
-import { useAuth } from "@/components/supabase-auth-provider"
+import { useSession } from "next-auth/react"
 
 export default function ParticipantResources() {
-  const { isLoading } = useAuth()
+  const { data: session } = useSession()
 
-  if (isLoading) {
-    return null // You could add a loading skeleton here if needed
+  if (!session) {
+    return <p className="text-red-500">You must be logged in to view this page</p>
   }
 
   const resources = [
@@ -108,62 +108,48 @@ export default function ParticipantResources() {
                   ))}
                 </TabsList>
                 <TabsContent value="All">
-                  <div className="rounded-md border border-napps-green/20">
-                    <div className="grid grid-cols-5 border-b p-3 font-medium">
-                      <div>Name</div>
-                      <div>Type</div>
-                      <div>Size</div>
-                      <div>Date Added</div>
-                      <div>Actions</div>
-                    </div>
+                  <div className="space-y-4">
                     {resources.map((resource) => (
-                      <div key={resource.id} className="grid grid-cols-5 border-b p-3 last:border-0">
-                        <div className="flex items-center gap-2">
+                      <div
+                        key={resource.id}
+                        className="flex items-center justify-between rounded-lg border border-napps-green/20 p-3 hover:bg-napps-green/5"
+                      >
+                        <div className="flex items-center gap-3">
                           {getFileIcon(resource.type)}
-                          <span>{resource.name}</span>
+                          <div>
+                            <p className="font-medium">{resource.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {resource.type} • {resource.size}
+                            </p>
+                          </div>
                         </div>
-                        <div>{resource.type}</div>
-                        <div>{resource.size}</div>
-                        <div>{resource.date}</div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
                 </TabsContent>
                 {Object.entries(resourcesByCategory).map(([category, categoryResources]) => (
                   <TabsContent key={category} value={category}>
-                    <div className="rounded-md border border-napps-green/20">
-                      <div className="grid grid-cols-5 border-b p-3 font-medium">
-                        <div>Name</div>
-                        <div>Type</div>
-                        <div>Size</div>
-                        <div>Date Added</div>
-                        <div>Actions</div>
-                      </div>
+                    <div className="space-y-4">
                       {categoryResources.map((resource) => (
-                        <div key={resource.id} className="grid grid-cols-5 border-b p-3 last:border-0">
-                          <div className="flex items-center gap-2">
+                        <div
+                          key={resource.id}
+                          className="flex items-center justify-between rounded-lg border border-napps-green/20 p-3 hover:bg-napps-green/5"
+                        >
+                          <div className="flex items-center gap-3">
                             {getFileIcon(resource.type)}
-                            <span>{resource.name}</span>
+                            <div>
+                              <p className="font-medium">{resource.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {resource.type} • {resource.size}
+                              </p>
+                            </div>
                           </div>
-                          <div>{resource.type}</div>
-                          <div>{resource.size}</div>
-                          <div>{resource.date}</div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
+                            <Download className="h-4 w-4" />
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -172,76 +158,43 @@ export default function ParticipantResources() {
               </Tabs>
             </CardContent>
           </Card>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-napps-green/20 dark:border-napps-green/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-napps-green" />
-                  Featured Resources
-                </CardTitle>
-                <CardDescription>Recommended materials for all participants</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {resources.slice(0, 3).map((resource) => (
+
+          <Card className="border-napps-green/20 dark:border-napps-green/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Video className="h-5 w-5 text-napps-green" />
+                Recent Videos
+              </CardTitle>
+              <CardDescription>Watch recordings of conference sessions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {resources
+                  .filter((r) => r.type === "MP4")
+                  .map((resource) => (
                     <div
                       key={resource.id}
-                      className="flex items-center justify-between rounded-lg border border-napps-green/20 p-3 hover:bg-napps-green/5"
+                      className="rounded-lg border border-napps-green/20 p-3 hover:bg-napps-green/5"
                     >
-                      <div className="flex items-center gap-3">
-                        {getFileIcon(resource.type)}
-                        <div>
-                          <p className="font-medium">{resource.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {resource.type} • {resource.size}
-                          </p>
-                        </div>
+                      <div className="aspect-video bg-muted rounded-md mb-3 flex items-center justify-center">
+                        <Video className="h-10 w-10 text-muted-foreground" />
                       </div>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-napps-green">
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      <h3 className="font-medium mb-1">{resource.name}</h3>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">{resource.size}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-napps-green/30 text-napps-green hover:bg-napps-green/10"
+                        >
+                          Watch Now
+                        </Button>
+                      </div>
                     </div>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-napps-green/20 dark:border-napps-green/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Video className="h-5 w-5 text-napps-green" />
-                  Recent Videos
-                </CardTitle>
-                <CardDescription>Watch recordings of conference sessions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {resources
-                    .filter((r) => r.type === "MP4")
-                    .map((resource) => (
-                      <div
-                        key={resource.id}
-                        className="rounded-lg border border-napps-green/20 p-3 hover:bg-napps-green/5"
-                      >
-                        <div className="aspect-video bg-muted rounded-md mb-3 flex items-center justify-center">
-                          <Video className="h-10 w-10 text-muted-foreground" />
-                        </div>
-                        <h3 className="font-medium mb-1">{resource.name}</h3>
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-muted-foreground">{resource.size}</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-napps-green/30 text-napps-green hover:bg-napps-green/10"
-                          >
-                            Watch Now
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </main>
       </div>
     </div>

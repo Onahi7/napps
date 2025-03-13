@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,17 +5,22 @@ import { Badge } from "@/components/ui/badge"
 import { CalendarDays, MapPin, CreditCard, Hotel, FileText, User } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-hooks"
-import { getRegistrationAmount, getConferenceDetails } from "@/lib/config-service"
+import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
+
+type PaymentStatus = "pending" | "completed" | "failed"
+type AccreditationStatus = "pending" | "completed" | "declined"
+type AccommodationStatus = "not_booked" | "booked" | "checked_in"
 
 export function ParticipantDashboard() {
   const { user, profile } = useAuth()
   const [registrationAmount, setRegistrationAmount] = useState<number>(0)
-  const [conferenceDetails, setConferenceDetails] = useState({
+  const [conferenceDetails, setConferenceDetails] = useState<ConferenceDetails>({
     name: "6th Annual NAPPS North Central Zonal Education Summit 2025",
     date: "May 21-22, 2025",
     venue: "Lafia City Hall, Lafia",
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [accommodationStatus, setAccommodationStatus] = useState<AccommodationStatus>("not_booked")
 
   useEffect(() => {
     async function loadData() {
@@ -39,195 +42,131 @@ export function ParticipantDashboard() {
     loadData()
   }, [])
 
-  // Sample data for dashboard
-  const paymentStatus = "paid" // or "pending" or "failed"
-  const accreditationStatus = "pending" // or "accredited" or "declined"
-  const accommodationStatus = "not_booked" // or "booked" or "checked_in"
+  // Get current status values from profile
+  const paymentStatus: PaymentStatus = profile?.payment_status as PaymentStatus || "pending"
+  const accreditationStatus: AccreditationStatus = profile?.accreditation_status as AccreditationStatus || "pending"
+
+  const getBadgeVariant = (status: string, type: 'payment' | 'accreditation' | 'accommodation') => {
+    switch (type) {
+      case 'payment':
+        return status === "completed" ? "outline" : "secondary"
+      case 'accreditation':
+        if (status === "completed") return "outline"
+        if (status === "declined") return "destructive"
+        return "secondary"
+      case 'accommodation':
+        if (status === "checked_in") return "outline"
+        if (status === "booked") return "default"
+        return "secondary"
+      default:
+        return "default"
+    }
+  }
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <Card className="col-span-full border-napps-gold/30 card-glow">
-        <CardHeader className="pb-2">
-          <CardTitle>Welcome to the Summit</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-2">
-            <h3 className="text-lg font-bold">{conferenceDetails.name}</h3>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      {/* Conference Info Card */}
+      <Card className="md:col-span-2 lg:col-span-3 border-napps-gold/30 card-glow">
+        <CardContent className="pt-6">
+          <h2 className="text-2xl font-bold text-napps-gold text-shadow-sm mb-2">
+            {conferenceDetails.name}
+          </h2>
+          <div className="flex flex-col md:flex-row gap-4 text-muted-foreground">
+            <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4" />
               <span>{conferenceDetails.date}</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4" />
               <span>{conferenceDetails.venue}</span>
             </div>
           </div>
         </CardContent>
-        <CardFooter>
-          <p className="text-sm text-muted-foreground">
-            Thank you for registering for the summit. We look forward to seeing you!
-          </p>
-        </CardFooter>
       </Card>
 
+      {/* Payment Status Card */}
       <Card className="border-napps-gold/30">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle>Registration</CardTitle>
-            <Badge
-              variant={paymentStatus === "paid" ? "default" : paymentStatus === "pending" ? "outline" : "destructive"}
-              className={paymentStatus === "paid" ? "bg-green-500" : ""}
-            >
-              {paymentStatus === "paid"
-                ? "Paid"
-                : paymentStatus === "pending"
-                ? "Pending"
-                : "Failed"}
-            </Badge>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-napps-gold" />
+            Payment Status
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Registration Fee</span>
-              <span className="font-medium">₦{registrationAmount.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Payment Date</span>
-              <span className="text-sm">March 10, 2025</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Payment Method</span>
-              <span className="text-sm">Card Payment</span>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-muted-foreground">Registration Fee:</span>
+            <span className="text-xl font-bold">₦{registrationAmount.toLocaleString()}</span>
           </div>
+          <Badge variant={getBadgeVariant(paymentStatus, 'payment')}>
+            {paymentStatus === "completed" ? "Paid" : "Pending Payment"}
+          </Badge>
         </CardContent>
         <CardFooter>
-          <div className="flex w-full justify-between">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/participant/payment-receipt">
-                <FileText className="mr-2 h-4 w-4" />
-                View Receipt
-              </Link>
+          {paymentStatus !== "completed" && (
+            <Button asChild className="w-full" variant="gold">
+              <Link href="/payment">Pay Now</Link>
             </Button>
-            {paymentStatus !== "paid" && (
-              <Button size="sm" className="bg-napps-gold text-black hover:bg-napps-gold/90" asChild>
-                <Link href="/payment">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Pay Now
-                </Link>
-              </Button>
-            )}
-          </div>
+          )}
         </CardFooter>
       </Card>
 
+      {/* Accreditation Status Card */}
       <Card className="border-napps-gold/30">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle>Accreditation</CardTitle>
-            <Badge
-              variant={
-                accreditationStatus === "accredited"
-                  ? "default"
-                  : accreditationStatus === "pending"
-                  ? "outline"
-                  : "destructive"
-              }
-              className={accreditationStatus === "accredited" ? "bg-green-500" : ""}
-            >
-              {accreditationStatus === "accredited"
-                ? "Accredited"
-                : accreditationStatus === "pending"
-                ? "Pending"
-                : "Declined"}
-            </Badge>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5 text-napps-gold" />
+            Accreditation
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted-foreground">
-              {accreditationStatus === "accredited"
-                ? "You have been successfully accredited for the summit."
-                : accreditationStatus === "pending"
-                ? "Your accreditation is pending. Please visit the accreditation desk upon arrival."
-                : "Your accreditation has been declined. Please contact support."}
-            </p>
-          </div>
+          <Badge variant={getBadgeVariant(accreditationStatus, 'accreditation')}>
+            {accreditationStatus === "completed"
+              ? "Accredited"
+              : accreditationStatus === "declined"
+              ? "Declined"
+              : "Pending"}
+          </Badge>
         </CardContent>
         <CardFooter>
-          <Button variant="outline" size="sm" className="w-full" asChild>
-            <Link href="/participant/qrcode">
-              View QR Code
+          <Button asChild className="w-full" variant="gold">
+            <Link href="/participant/accreditation">
+              {accreditationStatus === "completed" ? "View Details" : "Get Accredited"}
             </Link>
           </Button>
         </CardFooter>
       </Card>
 
+      {/* Accommodation Status Card */}
       <Card className="border-napps-gold/30">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle>Accommodation</CardTitle>
-            <Badge
-              variant={
-                accommodationStatus === "checked_in"
-                  ? "default"
-                  : accommodationStatus === "booked"
-                  ? "outline"
-                  : "secondary"
-              }
-              className={accommodationStatus === "checked_in" ? "bg-green-500" : ""}
-            >
-              {accommodationStatus === "checked_in"
-                ? "Checked In"
-                : accommodationStatus === "booked"
-                ? "Booked"
-                : "Not Booked"}
-            </Badge>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Hotel className="h-5 w-5 text-napps-gold" />
+            Accommodation
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted-foreground">
-              {accommodationStatus === "checked_in"
-                ? "You have checked in to your accommodation."
-                : accommodationStatus === "booked"
-                ? "Your accommodation has been booked."
-                : "You have not booked accommodation yet."}
-            </p>
-          </div>
+          <Badge variant={getBadgeVariant(accommodationStatus, 'accommodation')}>
+            {accommodationStatus === "checked_in"
+              ? "Checked In"
+              : accommodationStatus === "booked"
+              ? "Booked"
+              : "Not Booked"}
+          </Badge>
         </CardContent>
         <CardFooter>
-          <Button variant="outline" size="sm" className="w-full" asChild>
+          <Button asChild className="w-full" variant="gold">
             <Link href="/participant/accommodation">
-              <Hotel className="mr-2 h-4 w-4" />
-              {accommodationStatus === "not_booked" ? "Book Accommodation" : "View Details"}
+              {accommodationStatus === "checked_in"
+                ? "View Details"
+                : accommodationStatus === "booked"
+                ? "Manage Booking"
+                : "Book Now"}
             </Link>
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card className="border-napps-gold/30">
-        <CardHeader className="pb-2">
-          <CardTitle>Profile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{profile?.full_name || user?.name || "Participant"}</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Keep your profile information up to date to ensure a smooth summit experience.
-            </p>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button variant="outline" size="sm" className="w-full" asChild>
-            <Link href="/participant/profile">Update Profile</Link>
           </Button>
         </CardFooter>
       </Card>
     </div>
   )
 }
+
+export default ParticipantDashboard;

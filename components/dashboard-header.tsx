@@ -18,11 +18,10 @@ import { ThemeToggle } from "@/components/theme-toggle"
 interface DashboardHeaderProps {
   role: "admin" | "participant" | "validator"
   title: string
+  children?: React.ReactNode
 }
-
-export function DashboardHeader({ role, title }: DashboardHeaderProps) {
+export function DashboardHeader({ role, title, children }: DashboardHeaderProps) {
   const profileLink = `/${role}/profile`
-
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-napps-gold/30 bg-background px-4 sm:px-6">
       <SidebarTrigger />
@@ -30,8 +29,9 @@ export function DashboardHeader({ role, title }: DashboardHeaderProps) {
         <h1 className="text-lg font-semibold gold-text">{title}</h1>
       </div>
       <div className="flex items-center gap-4">
+        {children}
         <ThemeToggle />
-
+        
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" className="relative border-napps-gold/30 hover:border-napps-gold/50">

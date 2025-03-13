@@ -1,61 +1,47 @@
-let userConfig = undefined
-try {
-  userConfig = await import('./v0-user-next.config')
-} catch (e) {
-  // ignore error
-}
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // Disable image optimization in development
   images: {
-    unoptimized: true,
-    domains: ['nqphynggzrllneguhjhb.supabase.co'], // Add your Supabase domain
-    minimumCacheTTL: 60,
+    unoptimized: process.env.NODE_ENV === 'development',
   },
-  experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  },
-  reactStrictMode: true,
-  swcMinify: true, // Use SWC for minification
-  poweredByHeader: false, // Remove X-Powered-By header
+  // Enable production source maps
+  productionBrowserSourceMaps: true,
+  // Optimize production builds
   compiler: {
-    removeConsole: process.env.NODE_ENV === "production", // Remove console.logs in production
+    removeConsole: process.env.NODE_ENV === 'production',
   },
-  // Production settings
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  },
-}
-
-mergeConfig(nextConfig, userConfig)
-
-function mergeConfig(nextConfig, userConfig) {
-  if (!userConfig) {
-    return
-  }
-
-  for (const key in userConfig) {
-    if (
-      typeof nextConfig[key] === 'object' &&
-      !Array.isArray(nextConfig[key])
-    ) {
-      nextConfig[key] = {
-        ...nextConfig[key],
-        ...userConfig[key],
-      }
-    } else {
-      nextConfig[key] = userConfig[key]
+  // Configure powered by header
+  poweredByHeader: false,
+  // Configure compression
+  compress: true,
+  // Configure headers for security
+  headers: async () => [
+    {
+      source: '/:path*',
+      headers: [
+        {
+          key: 'X-DNS-Prefetch-Control',
+          value: 'on'
+        },
+        {
+          key: 'X-XSS-Protection',
+          value: '1; mode=block'
+        },
+        {
+          key: 'X-Frame-Options',
+          value: 'SAMEORIGIN'
+        },
+        {
+          key: 'X-Content-Type-Options',
+          value: 'nosniff'
+        },
+        {
+          key: 'Referrer-Policy',
+          value: 'origin-when-cross-origin'
+        }
+      ]
     }
-  }
+  ]
 }
 
 export default nextConfig
