@@ -55,21 +55,27 @@ export default function RegisterPage() {
 
     if (!formData.full_name.trim()) {
       newErrors.full_name = "Full name is required"
+    } else if (formData.full_name.trim().length < 2) {
+      newErrors.full_name = "Full name must be at least 2 characters"
     }
 
     if (!formData.email.trim()) {
       newErrors.email = "Email is required"
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Invalid email format"
+    } else {
+      // Simple email validation - just check for @ and .
+      const emailParts = formData.email.split('@');
+      if (emailParts.length !== 2 || !emailParts[1].includes('.')) {
+        newErrors.email = "Please enter a valid email address"
+      }
     }
 
     if (!formData.phone.trim()) {
       newErrors.phone = "Phone number is required"
     } else {
-      // Validate phone format: digits only, 10-11 digits
+      // Validate phone format: Allow any format, but ensure we have enough digits
       const digitsOnly = formData.phone.replace(/\D/g, '')
-      if (!/^\d{10,11}$/.test(digitsOnly)) {
-        newErrors.phone = "Phone number must be 10-11 digits"
+      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+        newErrors.phone = "Phone number should have 10-15 digits"
       }
     }
 
@@ -92,36 +98,88 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrors({})
-
+    
     if (!validateForm()) {
       return
     }
-
+    
     setIsLoading(true)
     try {
       // Remove ALL non-digit characters from phone number
       const cleanedPhone = formData.phone.replace(/\D/g, '')
-
-      const result = await register({
+      
+      // Log the data being sent to help debug
+      console.log("Sending registration data:", {
         email: formData.email,
-        phone: cleanedPhone, // Use fully cleaned phone number
+        phone: cleanedPhone,
         full_name: formData.full_name.trim(),
-        password: "NAPPS2025", // Default password for participants
+        password: "NAPPS2025",
+        // Matching the expected field names on the server:
         organization: formData.school_name,
         state: formData.school_state,
         chapter: formData.napps_chapter
       })
 
-      if (!result.success) {
-        setErrors({ submit: result.error || "Registration failed" })
+      // Make a direct API call to see detailed errors
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          phone: cleanedPhone,
+          full_name: formData.full_name.trim(),
+          password: "NAPPS2025",
+          organization: formData.school_name,
+          state: formData.school_state,
+          chapter: formData.napps_chapter
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        console.error("Registration API error:", data)
+        
+        // Handle database connection errors specifically
+        if (data.message && data.message.includes("Connection terminated")) {
+          setErrors({ 
+            submit: "Unable to connect to the registration server. Please try again later or contact support." 
+          })
+          return
+        }
+        
+        // Show specific error message from the server if available
+        if (data.error) {
+          setErrors({ submit: data.error })
+        } else if (data.details) {
+          // Show the specific validation errors from Zod
+          const fieldErrors: ValidationErrors = {}
+          data.details.forEach((issue: any) => {
+            const path = issue.path[0]
+            // Map server field names back to client field names if needed
+            const clientFieldName = path === 'organization' ? 'school_name' : 
+                                   path === 'state' ? 'school_state' :
+                                   path === 'chapter' ? 'napps_chapter' : path
+            fieldErrors[clientFieldName] = issue.message
+          })
+          setErrors({...fieldErrors, submit: "Please fix the errors in the form"})
+        } else {
+          setErrors({ submit: "Registration failed. Please try again." })
+        }
         return
       }
-
-      // Directly redirect to payment page instead of initializing Paystack
+      
+      // Successfully registered
+      // Directly redirect to payment page
       router.push('/payment')
       
     } catch (error: any) {
-      setErrors({ submit: error.message || "Registration failed" })
+      console.error("Registration error:", error)
+      setErrors({ 
+        submit: "Network or server error. Please check your connection and try again." 
+      })
     } finally {
       setIsLoading(false)
     }
