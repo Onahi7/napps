@@ -28,6 +28,21 @@ export async function updateUserProfile(data: {
   if (!session?.user?.id) throw new Error('Unauthorized')
 
   try {
+    // Validate email format
+    if (data.email && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(data.email)) {
+      return { success: false, error: 'Invalid email format' }
+    }
+
+    // Validate phone format
+    if (data.phone && !/^\d{10,11}$/.test(data.phone)) {
+      return { success: false, error: 'Phone number must be 10 or 11 digits' }
+    }
+
+    // Validate required fields
+    if (!data.full_name) {
+      return { success: false, error: 'Full name is required' }
+    }
+
     const fields = Object.keys(data)
     const values = Object.values(data)
     const setClause = fields.map((field, i) => `${field} = $${i + 2}`).join(', ')
@@ -43,6 +58,15 @@ export async function updateUserProfile(data: {
     return { success: true }
   } catch (error: any) {
     console.error('Error updating profile:', error)
+    // Check for unique constraint violations
+    if (error.code === '23505') {
+      if (error.constraint === 'idx_profiles_email') {
+        return { success: false, error: 'This email is already in use' }
+      }
+      if (error.constraint === 'idx_profiles_phone') {
+        return { success: false, error: 'This phone number is already in use' }
+      }
+    }
     return { success: false, error: error.message }
   }
 }

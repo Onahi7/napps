@@ -6,7 +6,7 @@ import { DatabaseMonitor } from './db-monitor'
 process.env.NODE_PG_FORCE_NATIVE = 'false'
 
 // Create PostgreSQL connection pool with optimized settings for DigitalOcean
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   ssl: env.DATABASE_SSL ? {
     rejectUnauthorized: false,  // Always allow self-signed certificates

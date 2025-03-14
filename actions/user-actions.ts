@@ -15,24 +15,56 @@ export async function createValidator(data: {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  // Hash password
-  const hashedPassword = await hash(data.password, 10)
+  try {
+    // Validate email format
+    if (!data.email || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(data.email)) {
+      throw new Error('Invalid email format')
+    }
 
-  return await query(
-    `WITH new_user AS (
-      INSERT INTO users (email, password_hash)
-      VALUES ($1, $2)
-      RETURNING id
-    )
-    INSERT INTO profiles (id, email, full_name, phone, role)
-    SELECT id, $1, $3, $4, 'validator'
-    FROM new_user
-    RETURNING id`,
-    [data.email, hashedPassword, data.full_name, data.phone]
-  ).then(result => {
-    revalidatePath('/admin/validators')
-    return result.rows[0].id
-  })
+    // Validate phone format
+    if (!data.phone || !/^\d{10,11}$/.test(data.phone)) {
+      throw new Error('Phone number must be 10 or 11 digits')
+    }
+
+    // Validate required fields
+    if (!data.full_name || data.full_name.trim().length < 3) {
+      throw new Error('Full name is required and must be at least 3 characters')
+    }
+
+    if (!data.password || data.password.length < 8) {
+      throw new Error('Password must be at least 8 characters')
+    }
+
+    // Hash password
+    const hashedPassword = await hash(data.password, 10)
+
+    return await query(
+      `WITH new_user AS (
+        INSERT INTO users (email, password_hash)
+        VALUES ($1, $2)
+        RETURNING id
+      )
+      INSERT INTO profiles (id, email, full_name, phone, role)
+      SELECT id, $1, $3, $4, 'validator'
+      FROM new_user
+      RETURNING id`,
+      [data.email, hashedPassword, data.full_name, data.phone]
+    ).then(result => {
+      revalidatePath('/admin/validators')
+      return result.rows[0].id
+    })
+  } catch (error: any) {
+    // Handle unique constraint violations
+    if (error.code === '23505') {
+      if (error.constraint === 'idx_profiles_email') {
+        throw new Error('This email is already in use')
+      }
+      if (error.constraint === 'idx_profiles_phone') {
+        throw new Error('This phone number is already in use')
+      }
+    }
+    throw error
+  }
 }
 
 export async function updateValidator(userId: string, data: {
@@ -44,49 +76,82 @@ export async function updateValidator(userId: string, data: {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  // Start with profile updates
-  const profileUpdates = []
-  const values = []
-  let paramCount = 1
+  try {
+    // Validate email format if provided
+    if (data.email && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(data.email)) {
+      throw new Error('Invalid email format')
+    }
 
-  if (data.email) {
-    profileUpdates.push(`email = $${paramCount}`)
-    values.push(data.email)
-    paramCount++
-  }
-  if (data.full_name) {
-    profileUpdates.push(`full_name = $${paramCount}`)
-    values.push(data.full_name)
-    paramCount++
-  }
-  if (data.phone) {
-    profileUpdates.push(`phone = $${paramCount}`)
-    values.push(data.phone)
-    paramCount++
-  }
+    // Validate phone format if provided
+    if (data.phone && !/^\d{10,11}$/.test(data.phone)) {
+      throw new Error('Phone number must be 10 or 11 digits')
+    }
 
-  if (profileUpdates.length > 0) {
-    await query(
-      `UPDATE profiles 
-       SET ${profileUpdates.join(', ')}, updated_at = NOW()
-       WHERE id = $${paramCount}`,
-      [...values, userId]
-    )
-  }
+    // Validate name if provided
+    if (data.full_name && data.full_name.trim().length < 3) {
+      throw new Error('Full name must be at least 3 characters')
+    }
 
-  // Update password if provided
-  if (data.password) {
-    const hashedPassword = await hash(data.password, 10)
-    await query(
-      `UPDATE users 
-       SET password_hash = $1, updated_at = NOW()
-       WHERE id = $2`,
-      [hashedPassword, userId]
-    )
-  }
+    // Validate password if provided
+    if (data.password && data.password.length < 8) {
+      throw new Error('Password must be at least 8 characters')
+    }
 
-  revalidatePath('/admin/validators')
-  return { success: true }
+    // Start with profile updates
+    const profileUpdates = []
+    const values = []
+    let paramCount = 1
+
+    if (data.email) {
+      profileUpdates.push(`email = $${paramCount}`)
+      values.push(data.email)
+      paramCount++
+    }
+    if (data.full_name) {
+      profileUpdates.push(`full_name = $${paramCount}`)
+      values.push(data.full_name)
+      paramCount++
+    }
+    if (data.phone) {
+      profileUpdates.push(`phone = $${paramCount}`)
+      values.push(data.phone)
+      paramCount++
+    }
+
+    if (profileUpdates.length > 0) {
+      await query(
+        `UPDATE profiles 
+         SET ${profileUpdates.join(', ')}, updated_at = NOW()
+         WHERE id = $${paramCount}`,
+        [...values, userId]
+      )
+    }
+
+    // Update password if provided
+    if (data.password) {
+      const hashedPassword = await hash(data.password, 10)
+      await query(
+        `UPDATE users 
+         SET password_hash = $1, updated_at = NOW()
+         WHERE id = $2`,
+        [hashedPassword, userId]
+      )
+    }
+
+    revalidatePath('/admin/validators')
+    return { success: true }
+  } catch (error: any) {
+    // Handle unique constraint violations
+    if (error.code === '23505') {
+      if (error.constraint === 'idx_profiles_email') {
+        throw new Error('This email is already in use')
+      }
+      if (error.constraint === 'idx_profiles_phone') {
+        throw new Error('This phone number is already in use')
+      }
+    }
+    throw error
+  }
 }
 
 export async function deleteValidator(userId: string) {

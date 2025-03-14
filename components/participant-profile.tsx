@@ -80,8 +80,15 @@ export default function ParticipantProfile() {
 
   const handleSave = async () => {
     try {
-      if (!profileData.email || !profileData.email.includes("@")) {
+      // Email validation
+      if (!profileData.email || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(profileData.email)) {
         toast.error("Please enter a valid email address")
+        return
+      }
+
+      // Phone validation
+      if (profileData.phone && !/^\d{10,11}$/.test(profileData.phone)) {
+        toast.error("Phone number must be 10 or 11 digits")
         return
       }
 
@@ -184,9 +191,12 @@ export default function ParticipantProfile() {
                           name="email"
                           type="email"
                           placeholder="john@example.com"
+                          pattern="[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+                          title="Please enter a valid email address"
                           value={profileData.email}
                           onChange={handleInputChange}
                           className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                          required
                         />
                       )}
                     </div>
@@ -199,9 +209,12 @@ export default function ParticipantProfile() {
                           id="phone"
                           name="phone"
                           placeholder="08012345678"
+                          pattern="^\d{10,11}$"
+                          title="Phone number must be 10 or 11 digits"
                           value={profileData.phone}
                           onChange={handleInputChange}
                           className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                          required
                         />
                       )}
                     </div>
