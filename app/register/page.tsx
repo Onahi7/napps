@@ -65,6 +65,12 @@ export default function RegisterPage() {
 
     if (!formData.phone.trim()) {
       newErrors.phone = "Phone number is required"
+    } else {
+      // Validate phone format: digits only, 10-11 digits
+      const digitsOnly = formData.phone.replace(/\D/g, '')
+      if (!/^\d{10,11}$/.test(digitsOnly)) {
+        newErrors.phone = "Phone number must be 10-11 digits"
+      }
     }
 
     if (!formData.school_name.trim()) {
@@ -93,9 +99,12 @@ export default function RegisterPage() {
 
     setIsLoading(true)
     try {
+      // Remove ALL non-digit characters from phone number
+      const cleanedPhone = formData.phone.replace(/\D/g, '')
+
       const result = await register({
         email: formData.email,
-        phone: formData.phone.replace(/\s+/g, ''), // Remove spaces from phone
+        phone: cleanedPhone, // Use fully cleaned phone number
         full_name: formData.full_name.trim(),
         password: "NAPPS2025", // Default password for participants
         organization: formData.school_name,
