@@ -57,7 +57,13 @@ export async function updateConfig(key: string, value: any) {
   // Invalidate cache
   await cache.del(`${CONFIG_CACHE_PREFIX}${key}`)
 
+  // Revalidate all pages that might show the price
   revalidatePath('/admin/settings')
+  revalidatePath('/payment')
+  revalidatePath('/register')
+  revalidatePath('/participant/dashboard')
+  revalidatePath('/dashboard')
+  
   return { success: true }
 }
 
@@ -143,5 +149,25 @@ export async function initializeDefaultConfig() {
 
   revalidatePath('/admin/settings')
   return { success: true }
+}
+
+// Get configuration with forced revalidation
+export async function getConfigWithRevalidate(key: string) {
+  // Clear cache first
+  await cache.del(`${CONFIG_CACHE_PREFIX}${key}`)
+  
+  // Fetch fresh data
+  const result = await query(
+    'SELECT value FROM config WHERE key = $1',
+    [key]
+  )
+
+  const value = result.rows[0]?.value
+  if (value) {
+    // Cache with shorter TTL for admin changes
+    await cache.set(`${CONFIG_CACHE_PREFIX}${key}`, value, 60) // 1 minute cache
+  }
+
+  return value
 }
 

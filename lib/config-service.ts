@@ -2,6 +2,7 @@
 import { query } from "@/lib/db"
 import { CacheService } from "@/lib/cache"
 
+const CONFIG_CACHE_PREFIX = 'config:'
 const cache = CacheService.getInstance()
 
 export interface ConferenceDetails {
@@ -9,6 +10,9 @@ export interface ConferenceDetails {
   date: string
   venue: string
   theme?: string
+  bankName?: string
+  accountNumber?: string
+  accountName?: string
 }
 
 // Get a config value by key
@@ -29,6 +33,26 @@ export async function getConfig(key: string): Promise<any> {
     console.error(`Error in getConfig for key ${key}:`, error)
     return null
   }
+}
+
+// Get configuration with forced revalidation
+export async function getConfigWithRevalidate(key: string) {
+  // Clear cache first
+  await cache.del(`${CONFIG_CACHE_PREFIX}${key}`)
+  
+  // Fetch fresh data
+  const result = await query(
+    'SELECT value FROM config WHERE key = $1',
+    [key]
+  )
+
+  const value = result.rows[0]?.value
+  if (value) {
+    // Cache with shorter TTL for admin changes
+    await cache.set(`${CONFIG_CACHE_PREFIX}${key}`, value, 60) // 1 minute cache
+  }
+
+  return value
 }
 
 // Update a config value
@@ -65,7 +89,10 @@ export async function getConferenceDetails(): Promise<ConferenceDetails> {
     name: config.conference_name || '6th Annual NAPPS North Central Zonal Education Summit 2025',
     date: config.conference_date || 'May 21-22, 2025',
     venue: config.conference_venue || 'Lafia City Hall, Lafia',
-    theme: config.conference_theme || 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE'
+    theme: config.conference_theme || 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE',
+    bankName: config.bankName || "First Bank",
+    accountNumber: config.accountNumber || "1234567890",
+    accountName: config.accountName || "NAPPS NORTH CENTRAL ZONE"
   }
 
   await cache.set('conference_details', details, 3600) // Cache for 1 hour
@@ -83,7 +110,10 @@ export async function getConferenceConfig() {
         'conference_date',
         'conference_venue',
         'conference_theme',
-        'registrationAmount'
+        'registrationAmount',
+        'bankName',
+        'accountNumber',
+        'accountName'
       )
     `)
 
@@ -106,10 +136,29 @@ export async function initializeDefaultConfig(): Promise<void> {
     conference_date: 'May 21-22, 2025',
     conference_venue: 'Lafia City Hall, Lafia',
     conference_theme: 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE',
-    payment_split_code: null
+    payment_split_code: null,
+    bankName: "First Bank",
+    accountNumber: "1234567890",
+    accountName: "NAPPS NORTH CENTRAL ZONE"
   }
 
   for (const [key, value] of Object.entries(defaultConfig)) {
+    await updateConfig(key, value)
+  }
+}
+
+export async function updateConferenceDetails(details: Partial<ConferenceDetails>) {
+  const updates = [
+    { key: 'conference_name', value: details.name },
+    { key: 'conference_date', value: details.date },
+    { key: 'conference_venue', value: details.venue },
+    { key: 'conference_theme', value: details.theme },
+    { key: 'bankName', value: details.bankName },
+    { key: 'accountNumber', value: details.accountNumber },
+    { key: 'accountName', value: details.accountName },
+  ].filter(update => update.value !== undefined)
+
+  for (const { key, value } of updates) {
     await updateConfig(key, value)
   }
 }

@@ -26,6 +26,7 @@ export async function initializePayment(amount: number) {
        SET payment_reference = $1, 
            payment_amount = $2,
            payment_status = 'pending',
+           payment_proof = NULL,
            updated_at = NOW()
        WHERE id = $3`,
       [paymentReference, amount, session.user.id]
@@ -38,36 +39,66 @@ export async function initializePayment(amount: number) {
   }
 }
 
+export async function uploadPaymentProof(reference: string, proofUrl: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  return await withTransaction(async (client) => {
+    const profile = await client.query(
+      'SELECT payment_status FROM profiles WHERE payment_reference = $1',
+      [reference]
+    )
+
+    if (!profile.rows[0]) {
+      throw new Error('Payment reference not found')
+    }
+
+    if (profile.rows[0].payment_status === 'completed') {
+      throw new Error('Payment already verified')
+    }
+
+    await client.query(
+      `UPDATE profiles 
+       SET payment_proof = $1,
+           payment_status = 'proof_submitted',
+           updated_at = NOW()
+       WHERE payment_reference = $2`,
+      [proofUrl, reference]
+    )
+
+    revalidatePath('/admin/payments')
+    revalidatePath('/participant/dashboard')
+    return { success: true }
+  })
+}
+
 export async function verifyPayment(reference: string) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
   return await withTransaction(async (client) => {
-    // Get profile and verify payment status
     const profile = await client.query(
-      'SELECT payment_status, payment_reference FROM profiles WHERE id = $1',
-      [session.user.id]
+      'SELECT payment_status FROM profiles WHERE payment_reference = $1',
+      [reference]
     )
 
-    if (!profile.rows[0]) throw new Error('Profile not found')
-    if (profile.rows[0].payment_reference !== reference) {
-      throw new Error('Invalid payment reference')
-    }
-    if (profile.rows[0].payment_status === 'completed') {
-      return { verified: true }
+    if (!profile.rows[0]) {
+      throw new Error('Payment reference not found')
     }
 
-    // Update payment status
+    if (profile.rows[0].payment_status === 'completed') {
+      throw new Error('Payment already verified')
+    }
+
     await client.query(
       `UPDATE profiles 
        SET payment_status = 'completed',
-           payment_date = NOW(),
            updated_at = NOW()
-       WHERE id = $1`,
-      [session.user.id]
+       WHERE payment_reference = $1`,
+      [reference]
     )
 
-    revalidatePath('/payment')
+    revalidatePath('/admin/payments')
     revalidatePath('/participant/dashboard')
     return { verified: true }
   })
@@ -78,7 +109,7 @@ export async function getPaymentStatus() {
   if (!session?.user?.id) return null
 
   const result = await query(
-    `SELECT payment_status, payment_reference, payment_amount, payment_date 
+    `SELECT payment_status, payment_reference, payment_amount, payment_date, payment_proof 
      FROM profiles 
      WHERE id = $1`,
     [session.user.id]

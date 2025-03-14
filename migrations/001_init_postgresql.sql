@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   payment_reference TEXT UNIQUE,
   payment_amount INTEGER,
   payment_date TIMESTAMP WITH TIME ZONE,
+  payment_proof VARCHAR(255),
   accreditation_status TEXT NOT NULL DEFAULT 'pending' CHECK (accreditation_status IN ('pending', 'completed')),
   accreditation_date TIMESTAMP WITH TIME ZONE,
   qr_code TEXT,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   payment_reference TEXT UNIQUE,
   payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed')),
   total_amount INTEGER NOT NULL,
+  payment_proof VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -106,6 +108,8 @@ CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings USING btree (user_id
 CREATE INDEX IF NOT EXISTS idx_bookings_hotel_id ON bookings USING btree (hotel_id);
 CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans USING btree (user_id);
 CREATE INDEX IF NOT EXISTS idx_scans_scanned_by ON scans USING btree (scanned_by);
+CREATE INDEX profiles_payment_reference_idx ON profiles(payment_reference);
+CREATE INDEX bookings_payment_reference_idx ON bookings(payment_reference);
 
 -- Create function to automatically update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()

@@ -1,10 +1,33 @@
+"use client"
+
+import { useSession } from "next-auth/react"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { BookOpen, Calendar, CheckCircle, CreditCard, QrCode, Users, School } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
-export default function Home() {
+export default function HomePage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (status === "loading") return
+
+    if (session?.user) {
+      // Check user role and redirect accordingly
+      if (session.user.role === "admin") {
+        router.push("/admin/dashboard")
+      } else if (session.user.role === "validator") {
+        router.push("/validator/dashboard")
+      } else {
+        router.push("/participant/dashboard")
+      }
+    }
+  }, [session, status, router])
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-napps-green/10 to-white dark:from-napps-green/20 dark:to-background">
       <header className="bg-white dark:bg-background shadow-sm">

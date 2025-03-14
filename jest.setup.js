@@ -1,7 +1,6 @@
-// Add custom jest matchers for testing-library
 import '@testing-library/jest-dom';
 
-// Mock Next.js router
+// Mock next/navigation
 jest.mock('next/navigation', () => ({
   useRouter() {
     return {

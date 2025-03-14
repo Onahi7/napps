@@ -44,7 +44,7 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
   const adminMenuItems = [
     { href: "/admin/dashboard", icon: Home, label: "Dashboard" },
     { href: "/admin/registrations", icon: Users, label: "Registrations" },
-    { href: "/admin/payments", icon: CreditCard, label: "Payments" },
+    { href: "/admin/payments", icon: CreditCard, label: "Payment Reviews" },
     { href: "/admin/validators", icon: QrCode, label: "Validators" },
     { href: "/admin/accreditation", icon: CheckSquare, label: "Accreditation" },
     { href: "/admin/hotels", icon: Building, label: "Hotels" },
