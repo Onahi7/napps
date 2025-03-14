@@ -9,7 +9,10 @@
     "lint": "next lint",
     "migrate": "ts-node ./scripts/init-database.ts",
     "migrate:down": "ts-node ./scripts/cleanup-supabase.ts",
-    "deploy": "bash ./scripts/deploy.sh"
+    "deploy": "bash ./scripts/deploy.sh",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@auth/core": "^0.38.0",
@@ -72,6 +75,7 @@
     "react-hook-form": "^7.54.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
+    "redis": "^4.7.0",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",

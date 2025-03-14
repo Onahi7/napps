@@ -33,9 +33,9 @@ mkdir -p /opt/napps-summit
 echo "Copying environment file..."
 cp .env.production .env
 
-# Install dependencies
-echo "Installing dependencies..."
-npm ci
+# Install dependencies with legacy peer deps flag
+echo "Installing dependencies with --legacy-peer-deps..."
+npm ci --legacy-peer-deps
 
 # Run database migrations
 echo "Running database migrations..."
@@ -50,7 +50,7 @@ if ! command -v nginx &> /dev/null; then
     cat > /etc/nginx/sites-available/napps-summit << EOL
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name 146.190.53.175;
     
     location / {
         proxy_pass http://localhost:3000;

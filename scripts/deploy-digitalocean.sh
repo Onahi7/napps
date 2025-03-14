@@ -1,32 +1,37 @@
 #!/bin/bash
+# Deployment script for DigitalOcean
+echo "Starting deployment process..."
 
-# Digital Ocean Deployment Script for Napps Summit
-echo "Starting deployment to Digital Ocean..."
+# Navigate to application directory
+cd /opt/napps-summit
+
+# Pull latest changes
+echo "Pulling latest code from repository..."
+git pull
+
+# Install dependencies with legacy peer deps flag
+echo "Installing dependencies..."
+npm ci --production --legacy-peer-deps
 
 # Build the application
 echo "Building the application..."
 npm run build
 
-# Install PM2 if not already installed
-if ! command -v pm2 &> /dev/null; then
-    echo "Installing PM2..."
-    npm install -g pm2
+# Restart the application with PM2
+echo "Restarting the application..."
+if pm2 list | grep -q "napps-summit"; then
+    # Restart if already exists
+    pm2 restart napps-summit
+else
+    # Start if doesn't exist
+    pm2 start npm --name "napps-summit" -- start
+    # Save PM2 configuration
+    pm2 save
 fi
 
-# Stop any existing instance
-echo "Stopping existing application instance..."
-pm2 stop napps-summit || true
-
-# Start the application with PM2
-echo "Starting application with PM2..."
-pm2 start npm --name "napps-summit" -- start
-
-# Save PM2 process list
-echo "Saving PM2 process list..."
-pm2 save
-
-# Set up PM2 to start on system boot
-echo "Setting up PM2 to start on system boot..."
-pm2 startup
+# Run any pending migrations
+echo "Running database migrations..."
+node -r ts-node/register scripts/init-database.ts
 
 echo "Deployment completed successfully!"
+echo "Your application should be running at http://146.190.53.175"
