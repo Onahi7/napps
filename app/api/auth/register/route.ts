@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 import { PoolClient } from 'pg'
-import { pool } from '@/lib/db'
+import { pool, query } from '@/lib/db'
 import { DatabaseService } from '@/lib/db-service'
 
 // More lenient input validation schema for non-technical users
@@ -28,15 +28,57 @@ const registrationSchema = z.object({
   position: z.string().optional().default(""),
 })
 
+// Test database connection function
+async function testDbConnection() {
+  try {
+    const result = await query('SELECT NOW() as time');
+    return { success: true, time: result.rows[0].time };
+  } catch (error) {
+    console.error('Database connection test failed:', error);
+    return { success: false, error };
+  }
+}
+
 // Initialize database service using existing pool
-const dbService = DatabaseService.getInstance(pool)
+let dbService: DatabaseService;
+try {
+  dbService = DatabaseService.getInstance(pool);
+} catch (error) {
+  console.error('Failed to initialize DatabaseService:', error);
+  // We'll handle this case in the POST handler
+}
 
 export async function POST(req: NextRequest) {
   try {
+    // First, test the database connection
+    const connectionTest = await testDbConnection();
+    if (!connectionTest.success) {
+      console.error('Database connection test failed before processing registration');
+      return NextResponse.json({
+        success: false,
+        error: 'Unable to connect to the database. Please try again later.',
+        details: { connectionTest: false }
+      }, { status: 503 });
+    }
+    
+    // Ensure dbService is initialized
+    if (!dbService) {
+      try {
+        dbService = DatabaseService.getInstance(pool);
+      } catch (error) {
+        console.error('Failed to initialize DatabaseService during request:', error);
+        return NextResponse.json({
+          success: false,
+          error: 'Internal service configuration error. Please try again later.',
+        }, { status: 500 });
+      }
+    }
+    
     const body = await req.json()
     
-    // Log incoming request body for debugging
-    console.log('Registration request data:', body)
+    // Log incoming request body for debugging (without password)
+    const { password, ...logSafeData } = body;
+    console.log('Registration request data:', logSafeData)
     
     const result = registrationSchema.safeParse(body)
 
@@ -55,6 +97,26 @@ export async function POST(req: NextRequest) {
     // Use transaction to ensure both user and profile are created
     try {
       const userId = await dbService.withTransaction(async (client: PoolClient) => {
+        // Check if user already exists
+        const existingUser = await client.query(
+          'SELECT id FROM users WHERE email = $1',
+          [data.email]
+        );
+        
+        if (existingUser.rows.length > 0) {
+          throw new Error('EMAIL_EXISTS');
+        }
+        
+        // Check if phone number already exists
+        const existingPhone = await client.query(
+          'SELECT id FROM profiles WHERE phone = $1',
+          [data.phone]
+        );
+        
+        if (existingPhone.rows.length > 0) {
+          throw new Error('PHONE_EXISTS');
+        }
+
         // Create user record
         const userResult = await client.query(
           `INSERT INTO users (email, password_hash)
@@ -98,6 +160,21 @@ export async function POST(req: NextRequest) {
     } catch (dbError: any) {
       console.error('Database transaction error:', dbError)
       
+      // Handle custom errors
+      if (dbError.message === 'EMAIL_EXISTS') {
+        return NextResponse.json({
+          success: false,
+          error: 'This email is already registered. Please log in or use a different email.'
+        }, { status: 409 });
+      }
+      
+      if (dbError.message === 'PHONE_EXISTS') {
+        return NextResponse.json({
+          success: false,
+          error: 'This phone number is already registered. Please log in or use a different number.'
+        }, { status: 409 });
+      }
+      
       // Handle unique constraint violations with clearer error messages
       if (dbError.code === '23505') {
         if (dbError.constraint === 'users_email_key' || 
@@ -122,24 +199,36 @@ export async function POST(req: NextRequest) {
       }
 
       // Handle connection errors with a clear message
-      if (dbError.message.includes('connect') || dbError.message.includes('timeout')) {
+      if (dbError.message && (
+          dbError.message.includes('connect') || 
+          dbError.message.includes('timeout') ||
+          dbError.message.includes('Connection terminated')
+      )) {
         return NextResponse.json({
           success: false,
-          error: 'Connection to the database failed. Please try again later.'
+          error: 'Database connection failed. Please try again later.',
+          details: { message: dbError.message }
         }, { status: 503 })
       }
       
-      throw dbError; // Re-throw for general error handling
+      return NextResponse.json({
+        success: false,
+        error: 'Registration failed due to a database error. Please try again.',
+        details: { message: dbError.message, code: dbError.code }
+      }, { status: 500 });
     }
   } catch (error: any) {
     console.error('Registration error:', error)
 
-    // Return more user-friendly error message
+    // Return more user-friendly error message with details for debugging
     return NextResponse.json({
       success: false,
-      error: 'Registration could not be completed at this time. Please try again later.',
-      message: error.message,
-      code: error.code
+      error: 'Registration could not be completed. Please try again later.',
+      details: { 
+        message: error.message,
+        type: error.name,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
     }, { status: 500 })
   }
 }
