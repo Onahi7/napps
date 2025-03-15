@@ -115,3 +115,95 @@ export async function getProfileStats() {
 
 // Adding new updateProfile function that's an alias to updateUserProfile for compatibility
 export const updateProfile = updateUserProfile;
+
+export async function getParticipantStatus(userId: string | undefined) {
+  if (!userId) return null
+
+  const result = await query(
+    `SELECT 
+      payment_status,
+      accreditation_status,
+      accommodation_status
+     FROM profiles 
+     WHERE id = $1`,
+    [userId]
+  )
+
+  return {
+    payment: result.rows[0]?.payment_status || 'pending',
+    accreditation: result.rows[0]?.accreditation_status || 'pending',
+    accommodation: result.rows[0]?.accommodation_status || 'not_booked'
+  }
+}
+
+export async function getMealValidations(userId: string) {
+  const result = await query(
+    `SELECT 
+      date,
+      meal_type,
+      status,
+      validated_at,
+      validator_name
+     FROM meal_validations 
+     WHERE participant_id = $1
+     ORDER BY date ASC`,
+    [userId]
+  )
+
+  // Transform the flat data into the structured format needed by the UI
+  const mealData: { [key: string]: any } = {}
+  
+  result.rows.forEach(row => {
+    const date = new Date(row.date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
+    
+    if (!mealData[date]) {
+      mealData[date] = {
+        breakfast: { status: 'pending' },
+        dinner: { status: 'pending' }
+      }
+    }
+
+    if (row.status === 'validated') {
+      mealData[date][row.meal_type] = {
+        status: 'validated',
+        time: new Date(row.validated_at).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: 'numeric'
+        }),
+        validator: row.validator_name
+      }
+    } else if (row.status === 'expired') {
+      mealData[date][row.meal_type] = {
+        status: 'expired'
+      }
+    }
+  })
+
+  return mealData
+}
+
+export async function getNotifications() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return []
+
+  const result = await query(
+    `SELECT 
+      id,
+      message,
+      created_at as time,
+      read
+     FROM notifications 
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    [session.user.id]
+  )
+
+  return result.rows.map(row => ({
+    ...row,
+    time: new Date(row.time).toRelative()
+  }))
+}

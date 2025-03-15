@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@auth/core": "^0.38.0",
+    "@aws-sdk/client-s3": "^3.758.0",
     "@emotion/is-prop-valid": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.2",

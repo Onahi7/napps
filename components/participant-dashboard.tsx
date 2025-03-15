@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -5,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { CalendarDays, MapPin, CreditCard, Hotel, FileText, User } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-hooks"
-import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
+import { getRegistrationAmount, getConferenceDetails } from "@/lib/config-service"
+import { getParticipantStatus } from "@/actions/profile-actions"
 
 type PaymentStatus = "pending" | "completed" | "failed"
 type AccreditationStatus = "pending" | "completed" | "declined"
@@ -14,24 +17,31 @@ type AccommodationStatus = "not_booked" | "booked" | "checked_in"
 export function ParticipantDashboard() {
   const { user, profile } = useAuth()
   const [registrationAmount, setRegistrationAmount] = useState<number>(0)
-  const [conferenceDetails, setConferenceDetails] = useState<ConferenceDetails>({
-    name: "6th Annual NAPPS North Central Zonal Education Summit 2025",
-    date: "May 21-22, 2025",
-    venue: "Lafia City Hall, Lafia",
+  const [conferenceDetails, setConferenceDetails] = useState({
+    name: "",
+    date: "",
+    venue: "",
+    theme: ""
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [accommodationStatus, setAccommodationStatus] = useState<AccommodationStatus>("not_booked")
+  const [status, setStatus] = useState({
+    payment: "pending" as PaymentStatus,
+    accreditation: "pending" as AccreditationStatus,
+    accommodation: "not_booked" as AccommodationStatus
+  })
 
   useEffect(() => {
     async function loadData() {
       try {
-        const amount = await getRegistrationAmount()
+        const [amount, details, participantStatus] = await Promise.all([
+          getRegistrationAmount(),
+          getConferenceDetails(),
+          getParticipantStatus(user?.id)
+        ])
+        
         setRegistrationAmount(amount)
-
-        const details = await getConferenceDetails()
-        if (details) {
-          setConferenceDetails(details)
-        }
+        setConferenceDetails(details)
+        setStatus(participantStatus)
       } catch (error) {
         console.error("Error loading dashboard data:", error)
       } finally {
@@ -39,12 +49,10 @@ export function ParticipantDashboard() {
       }
     }
 
-    loadData()
-  }, [])
-
-  // Get current status values from profile
-  const paymentStatus: PaymentStatus = profile?.payment_status as PaymentStatus || "pending"
-  const accreditationStatus: AccreditationStatus = profile?.accreditation_status as AccreditationStatus || "pending"
+    if (user?.id) {
+      loadData()
+    }
+  }, [user?.id])
 
   const getBadgeVariant = (status: string, type: 'payment' | 'accreditation' | 'accommodation') => {
     switch (type) {
@@ -97,12 +105,12 @@ export function ParticipantDashboard() {
             <span className="text-muted-foreground">Registration Fee:</span>
             <span className="text-xl font-bold">₦{registrationAmount.toLocaleString()}</span>
           </div>
-          <Badge variant={getBadgeVariant(paymentStatus, 'payment')}>
-            {paymentStatus === "completed" ? "Paid" : "Pending Payment"}
+          <Badge variant={getBadgeVariant(status.payment, 'payment')}>
+            {status.payment === "completed" ? "Paid" : "Pending Payment"}
           </Badge>
         </CardContent>
         <CardFooter>
-          {paymentStatus !== "completed" && (
+          {status.payment !== "completed" && (
             <Button asChild className="w-full" variant="gold">
               <Link href="/payment">Pay Now</Link>
             </Button>
@@ -119,10 +127,10 @@ export function ParticipantDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Badge variant={getBadgeVariant(accreditationStatus, 'accreditation')}>
-            {accreditationStatus === "completed"
+          <Badge variant={getBadgeVariant(status.accreditation, 'accreditation')}>
+            {status.accreditation === "completed"
               ? "Accredited"
-              : accreditationStatus === "declined"
+              : status.accreditation === "declined"
               ? "Declined"
               : "Pending"}
           </Badge>
@@ -130,7 +138,7 @@ export function ParticipantDashboard() {
         <CardFooter>
           <Button asChild className="w-full" variant="gold">
             <Link href="/participant/accreditation">
-              {accreditationStatus === "completed" ? "View Details" : "Get Accredited"}
+              {status.accreditation === "completed" ? "View Details" : "Get Accredited"}
             </Link>
           </Button>
         </CardFooter>
@@ -145,10 +153,10 @@ export function ParticipantDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Badge variant={getBadgeVariant(accommodationStatus, 'accommodation')}>
-            {accommodationStatus === "checked_in"
+          <Badge variant={getBadgeVariant(status.accommodation, 'accommodation')}>
+            {status.accommodation === "checked_in"
               ? "Checked In"
-              : accommodationStatus === "booked"
+              : status.accommodation === "booked"
               ? "Booked"
               : "Not Booked"}
           </Badge>
@@ -156,9 +164,9 @@ export function ParticipantDashboard() {
         <CardFooter>
           <Button asChild className="w-full" variant="gold">
             <Link href="/participant/accommodation">
-              {accommodationStatus === "checked_in"
+              {status.accommodation === "checked_in"
                 ? "View Details"
-                : accommodationStatus === "booked"
+                : status.accommodation === "booked"
                 ? "Manage Booking"
                 : "Book Now"}
             </Link>

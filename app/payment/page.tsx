@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2, Copy, Upload } from "lucide-react"
 import { useSession } from 'next-auth/react'
 import { getConfig } from '@/lib/config-service'
-import { uploadPaymentProof } from "@/actions/payment-actions"
+import { uploadPaymentProof, initializePayment } from "@/actions/payment-actions"
 import { useToast } from "@/hooks/use-toast"
 
 const BANK_DETAILS = {
@@ -33,9 +33,19 @@ export default function PaymentPage() {
     const fetchConfig = async () => {
       try {
         const config = await getConfig('registrationAmount');
-        setRegistrationAmount(config ? Number.parseFloat(config) : 10000);
+        const amount = config ? Number.parseFloat(config) : 10000;
+        setRegistrationAmount(amount);
+        
+        // Initialize payment if no reference exists
+        const ref = searchParams.get('reference');
+        if (!ref) {
+          const result = await initializePayment(amount);
+          setPaymentReference(result.reference);
+        } else {
+          setPaymentReference(ref);
+        }
       } catch (error) {
-        console.error('Error fetching config:', error);
+        console.error('Error:', error);
         setRegistrationAmount(10000);
       } finally {
         setLoadingConfig(false);
@@ -43,12 +53,6 @@ export default function PaymentPage() {
     };
 
     fetchConfig();
-    
-    // Get payment reference from URL
-    const ref = searchParams.get('reference');
-    if (ref) {
-      setPaymentReference(ref);
-    }
   }, [searchParams]);
 
   const copyToClipboard = async (text: string) => {

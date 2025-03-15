@@ -6,12 +6,18 @@ import { authOptions } from '@/lib/auth-options'
 import { revalidatePath } from 'next/cache'
 import { CacheService } from '@/lib/cache'
 
+interface ConfigRow {
+  key: string;
+  value: any;
+  description?: string;
+}
+
 const cache = CacheService.getInstance()
 const CONFIG_CACHE_PREFIX = 'config:'
 const CONFIG_CACHE_TTL = 300 // 5 minutes
 
-export async function getConfig(key: string) {
-  // Try cache first
+export async function getConfig(key: string): Promise<any> {
+  // Check cache first
   const cached = await cache.get(`${CONFIG_CACHE_PREFIX}${key}`)
   if (cached) return cached
 
@@ -78,7 +84,7 @@ export async function getAllConfig() {
     'SELECT key, value, description FROM config ORDER BY key'
   )
 
-  const config = result.rows.map(row => ({
+  const config = result.rows.map((row: ConfigRow) => ({
     ...row,
     value: typeof row.value === 'string' ? JSON.parse(row.value) : row.value
   }))
@@ -127,7 +133,7 @@ export async function initializeDefaultConfig() {
   }
 
   const defaultConfig = {
-    registrationAmount: 15000,
+    registrationAmount: 20000,
     conference_name: '6th Annual NAPPS North Central Zonal Education Summit 2025',
     conference_date: 'May 21-22, 2025',
     conference_venue: 'Lafia City Hall, Lafia',

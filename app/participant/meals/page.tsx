@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { Button } from "@/components/ui/button"
@@ -5,51 +8,90 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Coffee, Utensils, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { useAuth } from "@/lib/auth-hooks"
+import { getMealValidations } from "@/actions/profile-actions"
+
+interface MealStatus {
+  status: "pending" | "validated" | "expired"
+  time?: string
+  validator?: string
+}
+
+interface DayMeals {
+  breakfast: MealStatus
+  dinner: MealStatus
+}
+
+interface MealData {
+  [key: string]: DayMeals
+}
 
 export default function ParticipantMeals() {
-  const days = ["Day 1 - May 15", "Day 2 - May 16", "Day 3 - May 17"]
-
-  const mealData = {
-    "Day 1 - May 15": {
-      breakfast: { status: "validated", time: "8:15 AM", validator: "John Smith" },
-      dinner: { status: "validated", time: "7:05 PM", validator: "Sarah Johnson" },
-    },
-    "Day 2 - May 16": {
-      breakfast: { status: "validated", time: "8:22 AM", validator: "John Smith" },
-      dinner: { status: "pending", time: "", validator: "" },
-    },
-    "Day 3 - May 17": {
-      breakfast: { status: "pending", time: "", validator: "" },
-      dinner: { status: "pending", time: "", validator: "" },
-    },
-  }
-
-  const getStatusIcon = (status: string) => {
-    if (status === "validated") {
-      return <CheckCircle className="h-5 w-5 text-napps-green" />
-    } else if (status === "rejected") {
-      return <XCircle className="h-5 w-5 text-red-500" />
-    } else {
-      return <AlertCircle className="h-5 w-5 text-yellow-500" />
+  const { user } = useAuth()
+  const [mealData, setMealData] = useState<MealData>({})
+  const [isLoading, setIsLoading] = useState(true)
+  
+  useEffect(() => {
+    async function loadMealData() {
+      if (!user?.id) return
+      
+      try {
+        const validations = await getMealValidations(user.id)
+        setMealData(validations)
+      } catch (error) {
+        console.error('Error loading meal validations:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
+    
+    loadMealData()
+  }, [user?.id])
 
-  const getStatusClass = (status: string) => {
-    if (status === "validated") {
-      return "bg-napps-green/20 text-napps-green dark:bg-napps-green/30 dark:text-napps-gold"
-    } else if (status === "rejected") {
-      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-    } else {
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
-    }
-  }
-
-  // Calculate validation progress
-  const totalMeals = Object.keys(mealData).length * 2 // 2 meals per day
+  const days = Object.keys(mealData)
+  const totalMeals = days.length * 2 // 2 meals per day
   const validatedMeals = Object.values(mealData).reduce((count, day) => {
     return count + (day.breakfast.status === "validated" ? 1 : 0) + (day.dinner.status === "validated" ? 1 : 0)
   }, 0)
   const progressPercentage = (validatedMeals / totalMeals) * 100
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "validated":
+        return <CheckCircle className="h-5 w-5 text-green-500" />
+      case "expired":
+        return <XCircle className="h-5 w-5 text-destructive" />
+      default:
+        return <AlertCircle className="h-5 w-5 text-yellow-500" />
+    }
+  }
+
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case "validated":
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+      case "expired":
+        return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+      default:
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr] bg-background">
+        <DashboardSidebar role="participant" />
+        <div className="flex flex-col">
+          <DashboardHeader role="participant" title="Meal Status" />
+          <main className="flex-1 p-6">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <p>Loading meal validations...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr] bg-background">
@@ -60,57 +102,35 @@ export default function ParticipantMeals() {
           <div className="grid gap-6 md:grid-cols-3 mb-6">
             <Card className="border-napps-green/20 dark:border-napps-green/30">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Coffee className="h-5 w-5 text-napps-green" />
-                  <CardTitle>Breakfast Status</CardTitle>
-                </div>
+                <CardTitle className="text-sm font-medium">Total Meals</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Validated:</span>
-                    <span className="font-medium">2/3</span>
-                  </div>
-                  <Progress value={66.67} className="h-2 bg-muted" indicatorClassName="bg-napps-green" />
-                </div>
+                <div className="text-2xl font-bold">{totalMeals}</div>
+                <p className="text-xs text-muted-foreground">Throughout the conference</p>
               </CardContent>
             </Card>
 
             <Card className="border-napps-green/20 dark:border-napps-green/30">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Utensils className="h-5 w-5 text-napps-green" />
-                  <CardTitle>Dinner Status</CardTitle>
-                </div>
+                <CardTitle className="text-sm font-medium">Meals Validated</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Validated:</span>
-                    <span className="font-medium">1/3</span>
-                  </div>
-                  <Progress value={33.33} className="h-2 bg-muted" indicatorClassName="bg-napps-green" />
-                </div>
+                <div className="text-2xl font-bold">{validatedMeals}</div>
+                <p className="text-xs text-muted-foreground">Successfully validated meals</p>
               </CardContent>
             </Card>
 
             <Card className="border-napps-green/20 dark:border-napps-green/30">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-napps-green" />
-                  <CardTitle>Overall Progress</CardTitle>
-                </div>
+                <CardTitle className="text-sm font-medium">Overall Progress</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Total Validated:</span>
-                    <span className="font-medium">
-                      {validatedMeals}/{totalMeals}
-                    </span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-2xl font-bold">
+                    {validatedMeals}/{totalMeals}
                   </div>
-                  <Progress value={progressPercentage} className="h-2 bg-muted" indicatorClassName="bg-napps-green" />
                 </div>
+                <Progress value={progressPercentage} className="h-2 bg-muted" indicatorClassName="bg-napps-green" />
               </CardContent>
             </Card>
           </div>
@@ -145,30 +165,30 @@ export default function ParticipantMeals() {
 
                         <div className="space-y-4">
                           <div className="flex items-center gap-3">
-                            {getStatusIcon(mealData[day as keyof typeof mealData].breakfast.status)}
+                            {getStatusIcon(mealData[day]?.breakfast.status)}
                             <div>
                               <p className="font-medium">Status:</p>
                               <p>
                                 <span
                                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusClass(
-                                    mealData[day as keyof typeof mealData].breakfast.status,
+                                    mealData[day]?.breakfast.status
                                   )}`}
                                 >
-                                  {mealData[day as keyof typeof mealData].breakfast.status.charAt(0).toUpperCase() +
-                                    mealData[day as keyof typeof mealData].breakfast.status.slice(1)}
+                                  {mealData[day]?.breakfast.status.charAt(0).toUpperCase() +
+                                    mealData[day]?.breakfast.status.slice(1)}
                                 </span>
                               </p>
                             </div>
                           </div>
 
-                          {mealData[day as keyof typeof mealData].breakfast.status === "validated" && (
+                          {mealData[day]?.breakfast.status === "validated" && (
                             <>
                               <div className="flex items-center gap-3">
                                 <Clock className="h-5 w-5 text-muted-foreground" />
                                 <div>
                                   <p className="font-medium">Validation Time:</p>
                                   <p className="text-muted-foreground">
-                                    {mealData[day as keyof typeof mealData].breakfast.time}
+                                    {mealData[day]?.breakfast.time}
                                   </p>
                                 </div>
                               </div>
@@ -178,17 +198,17 @@ export default function ParticipantMeals() {
                                 <div>
                                   <p className="font-medium">Validated By:</p>
                                   <p className="text-muted-foreground">
-                                    {mealData[day as keyof typeof mealData].breakfast.validator}
+                                    {mealData[day]?.breakfast.validator}
                                   </p>
                                 </div>
                               </div>
                             </>
                           )}
 
-                          {mealData[day as keyof typeof mealData].breakfast.status === "pending" && (
+                          {mealData[day]?.breakfast.status === "pending" && (
                             <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/50 p-3 text-sm">
                               <p className="font-medium text-yellow-800 dark:text-yellow-300">Breakfast Time:</p>
-                              <p className="text-yellow-700 dark:text-yellow-400">8:00 AM - 9:00 AM</p>
+                              <p className="text-yellow-700 dark:text-yellow-400">7:00 AM - 9:00 AM</p>
                               <p className="text-yellow-700 dark:text-yellow-400 mt-1">
                                 Please present your QR code to a validator during breakfast time.
                               </p>
@@ -205,31 +225,29 @@ export default function ParticipantMeals() {
 
                         <div className="space-y-4">
                           <div className="flex items-center gap-3">
-                            {getStatusIcon(mealData[day as keyof typeof mealData].dinner.status)}
+                            {getStatusIcon(mealData[day]?.dinner.status)}
                             <div>
                               <p className="font-medium">Status:</p>
                               <p>
                                 <span
                                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusClass(
-                                    mealData[day as keyof typeof mealData].dinner.status,
+                                    mealData[day]?.dinner.status
                                   )}`}
                                 >
-                                  {mealData[day as keyof typeof mealData].dinner.status.charAt(0).toUpperCase() +
-                                    mealData[day as keyof typeof mealData].dinner.status.slice(1)}
+                                  {mealData[day]?.dinner.status.charAt(0).toUpperCase() +
+                                    mealData[day]?.dinner.status.slice(1)}
                                 </span>
                               </p>
                             </div>
                           </div>
 
-                          {mealData[day as keyof typeof mealData].dinner.status === "validated" && (
+                          {mealData[day]?.dinner.status === "validated" && (
                             <>
                               <div className="flex items-center gap-3">
                                 <Clock className="h-5 w-5 text-muted-foreground" />
                                 <div>
                                   <p className="font-medium">Validation Time:</p>
-                                  <p className="text-muted-foreground">
-                                    {mealData[day as keyof typeof mealData].dinner.time}
-                                  </p>
+                                  <p className="text-muted-foreground">{mealData[day]?.dinner.time}</p>
                                 </div>
                               </div>
 
@@ -238,14 +256,14 @@ export default function ParticipantMeals() {
                                 <div>
                                   <p className="font-medium">Validated By:</p>
                                   <p className="text-muted-foreground">
-                                    {mealData[day as keyof typeof mealData].dinner.validator}
+                                    {mealData[day]?.dinner.validator}
                                   </p>
                                 </div>
                               </div>
                             </>
                           )}
 
-                          {mealData[day as keyof typeof mealData].dinner.status === "pending" && (
+                          {mealData[day]?.dinner.status === "pending" && (
                             <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/50 p-3 text-sm">
                               <p className="font-medium text-yellow-800 dark:text-yellow-300">Dinner Time:</p>
                               <p className="text-yellow-700 dark:text-yellow-400">6:00 PM - 8:00 PM</p>

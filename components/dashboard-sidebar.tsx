@@ -18,6 +18,8 @@ import {
   CheckSquare,
   BedDouble,
   Building,
+  LayoutDashboard,
+  CalendarClock,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -50,6 +52,7 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
     { href: "/admin/hotels", icon: Building, label: "Hotels" },
     { href: "/admin/meals", icon: Coffee, label: "Meal Tracking" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
+    { href: "/admin/assignments", icon: CalendarClock, label: "Assignments" },
   ]
 
   const participantMenuItems = [
