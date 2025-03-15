@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth-hooks"
 import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
 import { getParticipantStatus } from "@/actions/profile-actions"
 
-type PaymentStatus = "pending" | "completed" | "failed"
+type PaymentStatus = "pending" | "completed" | "failed" | "proof_submitted"
 type AccreditationStatus = "pending" | "completed" | "declined"
 type AccommodationStatus = "not_booked" | "booked" | "checked_in"
 
@@ -44,11 +44,13 @@ export function ParticipantDashboard() {
         
         setRegistrationAmount(amount)
         setConferenceDetails(details)
-        setStatus(participantStatus || {
-          payment: "pending",
-          accreditation: "pending",
-          accommodation: "not_booked"
-        })
+        if (participantStatus) {
+          setStatus({
+            payment: participantStatus.payment as PaymentStatus,
+            accreditation: participantStatus.accreditation as AccreditationStatus,
+            accommodation: participantStatus.accommodation as AccommodationStatus
+          })
+        }
       } catch (error) {
         console.error("Error loading dashboard data:", error)
       } finally {
@@ -76,6 +78,18 @@ export function ParticipantDashboard() {
       default:
         return "default"
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="md:col-span-2 lg:col-span-3 border-napps-gold/30">
+          <CardContent className="flex items-center justify-center min-h-[200px]">
+            <p>Loading dashboard data...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -113,11 +127,13 @@ export function ParticipantDashboard() {
             <span className="text-xl font-bold">₦{registrationAmount.toLocaleString()}</span>
           </div>
           <Badge variant={getBadgeVariant(status.payment, 'payment')}>
-            {status.payment === "completed" ? "Paid" : "Pending Payment"}
+            {status.payment === "completed" ? "Paid" : 
+             status.payment === "proof_submitted" ? "Proof Submitted" : 
+             "Pending Payment"}
           </Badge>
         </CardContent>
         <CardFooter>
-          {status.payment !== "completed" && (
+          {status.payment !== "completed" && status.payment !== "proof_submitted" && (
             <Button asChild className="w-full" variant="gold">
               <Link href="/payment">Pay Now</Link>
             </Button>

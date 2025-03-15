@@ -18,56 +18,52 @@ import {
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Plus, User, CheckCircle, XCircle, Edit, Trash2 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export default function AdminValidators() {
-  const [validators, setValidators] = useState([
-    {
-      id: 1,
-      name: "John Smith",
-      email: "john@example.com",
-      phone: "08012345678",
-      role: "Breakfast",
-      status: "Active",
-      validations: 78,
-    },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      email: "sarah@example.com",
-      phone: "08023456789",
-      role: "Dinner",
-      status: "Active",
-      validations: 65,
-    },
-    {
-      id: 3,
-      name: "Michael Brown",
-      email: "michael@example.com",
-      phone: "08034567890",
-      role: "Accreditation",
-      status: "Active",
-      validations: 112,
-    },
-    {
-      id: 4,
-      name: "Emily Davis",
-      email: "emily@example.com",
-      phone: "08045678901",
-      role: "Breakfast",
-      status: "Inactive",
-      validations: 0,
-    },
-    {
-      id: 5,
-      name: "David Wilson",
-      email: "david@example.com",
-      phone: "08056789012",
-      role: "Dinner",
-      status: "Active",
-      validations: 43,
-    },
-  ])
+  const [validators, setValidators] = useState<Array<{
+    id: number;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+    status: string;
+    validations: number;
+  }>>([])
+  const [loading, setLoading] = useState(true)
+  const [recentActivity, setRecentActivity] = useState<Array<{
+    id: number;
+    validator: string;
+    action: string;
+    time: string;
+    success: boolean;
+  }>>([])
+
+  useEffect(() => {
+    const loadValidators = async () => {
+      try {
+        // TODO: Implement validator fetching from API
+        setLoading(false)
+      } catch (error) {
+        console.error('Error loading validators:', error)
+        setLoading(false)
+      }
+    }
+
+    loadValidators()
+  }, [])
+
+  useEffect(() => {
+    const loadActivity = async () => {
+      try {
+        // TODO: Implement activity fetching from API
+      } catch (error) {
+        console.error('Error loading activity:', error)
+      }
+    }
+
+    loadActivity()
+  }, [])
 
   const [newValidator, setNewValidator] = useState({
     name: "",
@@ -325,43 +321,7 @@ export default function AdminValidators() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[
-                    {
-                      id: 1,
-                      validator: "John Smith",
-                      action: "Validated breakfast",
-                      time: "10 minutes ago",
-                      success: true,
-                    },
-                    {
-                      id: 2,
-                      validator: "Sarah Johnson",
-                      action: "Validated dinner",
-                      time: "25 minutes ago",
-                      success: true,
-                    },
-                    {
-                      id: 3,
-                      validator: "Michael Brown",
-                      action: "Validated accreditation",
-                      time: "1 hour ago",
-                      success: true,
-                    },
-                    {
-                      id: 4,
-                      validator: "Sarah Johnson",
-                      action: "Failed validation attempt",
-                      time: "2 hours ago",
-                      success: false,
-                    },
-                    {
-                      id: 5,
-                      validator: "David Wilson",
-                      action: "Validated dinner",
-                      time: "3 hours ago",
-                      success: true,
-                    },
-                  ].map((activity) => (
+                  {recentActivity.map((activity) => (
                     <div key={activity.id} className="flex items-center gap-3">
                       {activity.success ? (
                         <CheckCircle className="h-5 w-5 text-napps-green flex-shrink-0" />
@@ -375,6 +335,11 @@ export default function AdminValidators() {
                       <div className="text-sm text-muted-foreground">{activity.time}</div>
                     </div>
                   ))}
+                  {recentActivity.length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground">
+                      No recent activity
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

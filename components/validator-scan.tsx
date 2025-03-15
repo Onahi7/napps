@@ -25,71 +25,34 @@ export default function ValidatorScan() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { toast } = useToast()
 
-  // Mock function to simulate QR code scanning
-  const startScanning = () => {
-    setScanActive(true)
-    // In a real app, you would initialize the camera and QR scanner here
-    // For this mock, we'll just simulate a successful scan after 3 seconds
-    setTimeout(() => {
-      const mockParticipant = {
-        id: "123456",
-        full_name: "John Doe",
-        email: "john@example.com",
-        phone: "08012345678",
-        school: "ABC International School",
-        status: "accredited",
-        validations: {
-          breakfast: true,
-          lunch: false,
-          dinner: false,
-          accreditation: true,
-        },
+  const startScanning = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        setScanActive(true)
+        // TODO: Initialize QR code scanner
       }
-
-      // Simulate different validation scenarios
-      if (validationType === "breakfast" && mockParticipant.validations.breakfast) {
-        setScanResult({
-          success: false,
-          message: "Participant has already been validated for breakfast",
-          participant: mockParticipant,
-        })
-      } else if (validationType === "lunch" && mockParticipant.validations.lunch) {
-        setScanResult({
-          success: false,
-          message: "Participant has already been validated for lunch",
-          participant: mockParticipant,
-        })
-      } else if (validationType === "dinner" && mockParticipant.validations.dinner) {
-        setScanResult({
-          success: false,
-          message: "Participant has already been validated for dinner",
-          participant: mockParticipant,
-        })
-      } else if (validationType === "accreditation" && mockParticipant.validations.accreditation) {
-        setScanResult({
-          success: false,
-          message: "Participant has already been accredited",
-          participant: mockParticipant,
-        })
-      } else {
-        setScanResult({
-          success: true,
-          message: `Successfully validated participant for ${validationType}`,
-          participant: mockParticipant,
-        })
-      }
-
-      setScanActive(false)
-    }, 3000)
+    } catch (error) {
+      console.error('Error accessing camera:', error)
+      toast({
+        title: "Error",
+        description: "Could not access camera",
+        variant: "destructive"
+      })
+    }
   }
 
   const stopScanning = () => {
     setScanActive(false)
-    // In a real app, you would stop the camera and QR scanner here
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach(track => track.stop())
+      videoRef.current.srcObject = null
+    }
   }
 
-  // Mock function to simulate manual validation
-  const handleManualValidation = () => {
+  const handleManualValidation = async () => {
     if (!manualPhone) {
       toast({
         title: "Error",
@@ -100,67 +63,36 @@ export default function ValidatorScan() {
     }
 
     setIsLoading(true)
-
-    // Simulate API call delay
-    setTimeout(() => {
-      const mockParticipant = {
-        id: "123456",
-        full_name: "John Doe",
-        email: "john@example.com",
-        phone: "08012345678",
-        school: "ABC International School",
-        status: "accredited",
-        validations: {
-          breakfast: false,
-          lunch: false,
-          dinner: false,
-          accreditation: true,
-        },
-      }
-
-      // Check if phone matches our mock data
-      if (manualPhone === mockParticipant.phone || manualPhone === "08012345678") {
-        setScanResult({
-          success: true,
-          message: `Successfully validated participant for ${validationType}`,
-          participant: mockParticipant,
-        })
-      } else {
-        setScanResult({
-          success: false,
-          message: "Participant not found",
-          participant: null,
-        })
-      }
-
+    try {
+      // TODO: Implement real validation API call
       setIsLoading(false)
-    }, 1500)
+    } catch (error) {
+      console.error('Error validating:', error)
+      toast({
+        title: "Error",
+        description: "Failed to validate participant",
+        variant: "destructive"
+      })
+      setIsLoading(false)
+    }
   }
 
-  const handleValidate = () => {
+  const handleValidate = async () => {
     if (!scanResult?.participant) return
 
     setIsLoading(true)
-
-    // Simulate API call to update validation status
-    setTimeout(() => {
-      toast({
-        title: "Success",
-        description: `Participant validated for ${validationType}`,
-      })
-
-      // Update the scan result to reflect the new validation status
-      const updatedParticipant = { ...scanResult.participant }
-      updatedParticipant.validations[validationType as keyof typeof updatedParticipant.validations] = true
-
-      setScanResult({
-        success: true,
-        message: `Successfully validated participant for ${validationType}`,
-        participant: updatedParticipant,
-      })
-
+    try {
+      // TODO: Implement real validation API call
       setIsLoading(false)
-    }, 1000)
+    } catch (error) {
+      console.error('Error validating:', error)
+      toast({
+        title: "Error",
+        description: "Failed to validate participant",
+        variant: "destructive"
+      })
+      setIsLoading(false)
+    }
   }
 
   const handleReset = () => {

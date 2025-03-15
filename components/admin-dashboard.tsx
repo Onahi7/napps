@@ -13,9 +13,9 @@ export function AdminDashboard() {
   const [validators, setValidators] = useState<any[]>([])
   const [registrationAmount, setRegistrationAmount] = useState<number>(0)
   const [conferenceDetails, setConferenceDetails] = useState({
-    name: "6th Annual NAPPS North Central Zonal Education Summit 2025",
-    date: "May 21-22, 2025",
-    venue: "Lafia City Hall, Lafia",
+    name: "",
+    date: "",
+    venue: "",
   })
   const [isLoading, setIsLoading] = useState(true)
 

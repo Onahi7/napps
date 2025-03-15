@@ -335,7 +335,7 @@ export default function RegisterPage() {
                 <div className="rounded-md bg-muted p-4">
                   <div className="flex items-center justify-between">
                     <span>Registration Fee:</span>
-                    <span className="text-xl font-bold">₦{registrationAmount?.toLocaleString()}</span>
+                    <span className="text-xl font-bold">₦{20000}</span>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     After registration, you will receive bank transfer details and a unique payment reference code.

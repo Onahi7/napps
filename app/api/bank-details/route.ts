@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
-import { getConferenceDetails } from '@/lib/config-service'
+import { getServerConfig } from '@/lib/config-service'
 
 export async function GET() {
   try {
-    const details = await getConferenceDetails()
+    const [bankName, accountNumber, accountName] = await Promise.all([
+      getServerConfig<string>("bankName", ""),
+      getServerConfig<string>("accountNumber", ""),
+      getServerConfig<string>("accountName", "")
+    ])
     
     return NextResponse.json({
-      bankName: details.bankName,
-      accountNumber: details.accountNumber,
-      accountName: details.accountName,
+      bankName,
+      accountNumber,
+      accountName,
     })
   } catch (error) {
     console.error('Error fetching bank details:', error)

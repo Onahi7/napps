@@ -3,35 +3,45 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from "next/navigation"
 import { Loader2, Calendar, MapPin, Users } from "lucide-react"
 import Link from "next/link"
-import { getConfig } from "@/lib/config-service"
+import { getConfig, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [registrationAmount, setRegistrationAmount] = useState<number | null>(null)
-  const [loadingConfig, setLoadingConfig] = useState(true)
+  const [conferenceDetails, setConferenceDetails] = useState<ConferenceDetails>({
+    name: '',
+    date: '',
+    venue: '',
+    theme: ''
+  })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchConfig = async () => {
+    const fetchData = async () => {
       try {
-        const config = await getConfig("registrationAmount")
-        setRegistrationAmount(config ? Number.parseFloat(config) : 10000)
+        const [config, details] = await Promise.all([
+          getConfig("registrationAmount"),
+          getConferenceDetails()
+        ])
+        setRegistrationAmount(config ? Number.parseFloat(config) : 0)
+        setConferenceDetails(details)
       } catch (error) {
-        console.error("Error fetching config:", error)
-        setRegistrationAmount(10000) // Default fallback
+        console.error("Error fetching data:", error)
+        setRegistrationAmount(0)
       } finally {
-        setLoadingConfig(false)
+        setLoading(false)
       }
     }
 
-    fetchConfig()
+    fetchData()
   }, [])
 
-  if (status === 'loading') {
+  if (status === 'loading' || loading) {
     return (
       <div className='flex h-screen items-center justify-center'>
         <Loader2 className='h-8 w-8 animate-spin text-primary' />
@@ -57,19 +67,19 @@ export default function DashboardPage() {
       <div className="mb-8">
         <Card>
           <CardHeader>
-            <CardTitle>6th Annual NAPPS North Central Zonal Education Summit 2025</CardTitle>
+            <CardTitle>{conferenceDetails.name}</CardTitle>
             <CardDescription>
-              "ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE"
+              "{conferenceDetails.theme}"
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-muted-foreground" />
-              <span>May 21-22, 2025</span>
+              <span>{conferenceDetails.date}</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-muted-foreground" />
-              <span>Lafia City Hall, Lafia</span>
+              <span>{conferenceDetails.venue}</span>
             </div>
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-muted-foreground" />
@@ -101,10 +111,10 @@ export default function DashboardPage() {
               <div className="mb-4">
                 <p className="mb-2">Registration Fee:</p>
                 <p className="text-2xl font-bold">
-                  {loadingConfig ? (
+                  {registrationAmount === null ? (
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   ) : (
-                    `₦${registrationAmount?.toLocaleString()}`
+                    `₦${registrationAmount.toLocaleString()}`
                   )}
                 </p>
               </div>
@@ -156,7 +166,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p>
-                Thank you for registering for the 6th Annual NAPPS North Central Zonal Education Summit 2025. We look
+                Thank you for registering for {conferenceDetails.name}. We look
                 forward to seeing you at the event.
               </p>
               <div className="rounded-md bg-primary/10 p-4">

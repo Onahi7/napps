@@ -67,9 +67,13 @@ export async function uploadPaymentProof(formData: FormData) {
     const storage = StorageService.getInstance()
     const fileUrl = await storage.uploadFile(buffer, fileName, file.type)
 
-    // Save file URL to database
+    // Save file URL to database in the profiles table
     await query(
-      'UPDATE payments SET proof_url = $1, proof_uploaded_at = NOW() WHERE user_id = $2',
+      `UPDATE profiles 
+       SET payment_proof = $1, 
+           payment_status = 'proof_submitted',
+           updated_at = NOW() 
+       WHERE id = $2`,
       [fileUrl, session.user.id]
     )
 

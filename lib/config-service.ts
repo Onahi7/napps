@@ -1,6 +1,8 @@
 'use server'
 import { query } from "@/lib/db"
 import { CacheService } from "@/lib/cache"
+import { getServerSession } from "next-auth";
+import { authOptions } from "./auth-options";
 
 const CONFIG_CACHE_PREFIX = 'config:'
 const cache = CacheService.getInstance()
@@ -13,6 +15,18 @@ export interface ConferenceDetails {
   bankName?: string
   accountNumber?: string
   accountName?: string
+}
+
+export interface ConferenceDetailsResponse {
+  name: string;
+  date: string;
+  venue: string;
+  venue_address: string;
+  theme: string;
+  registration_hours: string;
+  morning_hours: string;
+  afternoon_hours: string;
+  evening_hours: string;
 }
 
 // Get a config value by key
@@ -77,22 +91,44 @@ export async function updateConfig(key: string, value: any): Promise<{ success: 
 
 // Get specific configs
 export async function getRegistrationAmount(): Promise<number> {
-  return getConfig('registrationAmount') || 15000
+  return getServerConfig<number>("registrationAmount", 0)
 }
 
-export async function getConferenceDetails(): Promise<ConferenceDetails> {
-  const cachedConfig = await cache.get('conference_details')
-  if (cachedConfig) return cachedConfig as ConferenceDetails
+export interface ConferenceHours {
+  registration: string;
+  morning: string;
+  afternoon: string;
+  evening: string;
+}
 
-  const config = await getConferenceConfig()
-  const details: ConferenceDetails = {
-    name: config.conference_name || '6th Annual NAPPS North Central Zonal Education Summit 2025',
-    date: config.conference_date || 'May 21-22, 2025',
-    venue: config.conference_venue || 'Lafia City Hall, Lafia',
-    theme: config.conference_theme || 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE',
-    bankName: config.bankName || "First Bank",
-    accountNumber: config.accountNumber || "1234567890",
-    accountName: config.accountName || "NAPPS NORTH CENTRAL ZONE"
+export async function getConferenceDetails(): Promise<ConferenceDetailsResponse> {
+  const cachedConfig = await cache.get('conference_details')
+  if (cachedConfig) return cachedConfig
+  
+  const [name, date, venue, theme, venue_address, hours] = await Promise.all([
+    getServerConfig<string>("conference_name", ""),
+    getServerConfig<string>("conference_date", ""),
+    getServerConfig<string>("conference_venue", ""),
+    getServerConfig<string>("conference_theme", ""),
+    getServerConfig<string>("venue_address", ""),
+    getServerConfig<ConferenceHours>("conference_hours", {
+      registration: "",
+      morning: "",
+      afternoon: "",
+      evening: ""
+    })
+  ])
+
+  const details = {
+    name,
+    date,
+    venue,
+    venue_address,
+    theme,
+    registration_hours: hours.registration,
+    morning_hours: hours.morning,
+    afternoon_hours: hours.afternoon,
+    evening_hours: hours.evening
   }
 
   await cache.set('conference_details', details, 3600) // Cache for 1 hour
@@ -131,15 +167,15 @@ export async function getConferenceConfig() {
 // Initialize default configuration
 export async function initializeDefaultConfig(): Promise<void> {
   const defaultConfig = {
-    registrationAmount: 20000,
-    conference_name: '6th Annual NAPPS North Central Zonal Education Summit 2025',
-    conference_date: 'May 21-22, 2025',
-    conference_venue: 'Lafia City Hall, Lafia',
-    conference_theme: 'ADVANCING INTEGRATED TECHNOLOGY FOR SUSTAINABLE PRIVATE EDUCATION PRACTICE',
+    registrationAmount: 0,
+    conference_name: '',
+    conference_date: '',
+    conference_venue: '',
+    conference_theme: '',
     payment_split_code: null,
-    bankName: "First Bank",
-    accountNumber: "1234567890",
-    accountName: "NAPPS NORTH CENTRAL ZONE"
+    bankName: '',
+    accountNumber: '',
+    accountName: ''
   }
 
   for (const [key, value] of Object.entries(defaultConfig)) {
@@ -161,5 +197,30 @@ export async function updateConferenceDetails(details: Partial<ConferenceDetails
   for (const { key, value } of updates) {
     await updateConfig(key, value)
   }
+}
+
+// Get config value from database
+export async function getServerConfig<T>(key: string, defaultValue?: T): Promise<T> {
+  try {
+    const result = await query(
+      'SELECT value FROM config WHERE key = $1',
+      [key]
+    )
+
+    if (!result.rows.length) {
+      return defaultValue as T
+    }
+    
+    const value = result.rows[0].value
+    return typeof value === 'string' ? JSON.parse(value) : value
+  } catch (error) {
+    console.error(`Error in getServerConfig for key ${key}:`, error)
+    return defaultValue as T
+  }
+}
+
+// Get or initialize payment split configuration
+export async function getPaymentSplitConfig() {
+  return getServerConfig<string>("payment_split_code", "")
 }
 

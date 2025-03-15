@@ -46,7 +46,7 @@ export default function PaymentPage() {
         }
       } catch (error) {
         console.error('Error:', error);
-        setRegistrationAmount(10000);
+        setRegistrationAmount(20000);
       } finally {
         setLoadingConfig(false);
       }

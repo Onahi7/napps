@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Coffee, Utensils, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { useAuth } from "@/lib/auth-hooks"
 import { getMealValidations } from "@/actions/profile-actions"
+import { getConferenceConfig } from "@/actions/config-actions";
 
 interface MealStatus {
   status: "pending" | "validated" | "expired"
@@ -29,23 +30,35 @@ interface MealData {
 export default function ParticipantMeals() {
   const { user } = useAuth()
   const [mealData, setMealData] = useState<MealData>({})
+  const [mealTimes, setMealTimes] = useState({
+    breakfast: "",
+    dinner: ""
+  })
   const [isLoading, setIsLoading] = useState(true)
   
   useEffect(() => {
-    async function loadMealData() {
+    async function loadData() {
       if (!user?.id) return
       
       try {
-        const validations = await getMealValidations(user.id)
+        const [validations, details] = await Promise.all([
+          getMealValidations(user.id),
+          getConferenceDetails()
+        ])
+        
         setMealData(validations)
+        setMealTimes({
+          breakfast: details.morning_hours || "7:00 AM - 9:00 AM",
+          dinner: details.evening_hours || "6:00 PM - 8:00 PM"
+        })
       } catch (error) {
-        console.error('Error loading meal validations:', error)
+        console.error('Error loading meal data:', error)
       } finally {
         setIsLoading(false)
       }
     }
     
-    loadMealData()
+    loadData()
   }, [user?.id])
 
   const days = Object.keys(mealData)
@@ -208,7 +221,7 @@ export default function ParticipantMeals() {
                           {mealData[day]?.breakfast.status === "pending" && (
                             <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/50 p-3 text-sm">
                               <p className="font-medium text-yellow-800 dark:text-yellow-300">Breakfast Time:</p>
-                              <p className="text-yellow-700 dark:text-yellow-400">7:00 AM - 9:00 AM</p>
+                              <p className="text-yellow-700 dark:text-yellow-400">{mealTimes.breakfast}</p>
                               <p className="text-yellow-700 dark:text-yellow-400 mt-1">
                                 Please present your QR code to a validator during breakfast time.
                               </p>
@@ -266,7 +279,7 @@ export default function ParticipantMeals() {
                           {mealData[day]?.dinner.status === "pending" && (
                             <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/50 p-3 text-sm">
                               <p className="font-medium text-yellow-800 dark:text-yellow-300">Dinner Time:</p>
-                              <p className="text-yellow-700 dark:text-yellow-400">6:00 PM - 8:00 PM</p>
+                              <p className="text-yellow-700 dark:text-yellow-400">{mealTimes.dinner}</p>
                               <p className="text-yellow-700 dark:text-yellow-400 mt-1">
                                 Please present your QR code to a validator during dinner time.
                               </p>
@@ -303,11 +316,11 @@ export default function ParticipantMeals() {
                   <div className="space-y-2 text-muted-foreground">
                     <div className="flex items-center gap-2">
                       <Coffee className="h-4 w-4 text-napps-green" />
-                      <span>Breakfast: 8:00 AM - 9:00 AM</span>
+                      <span>Breakfast: {mealTimes.breakfast}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Utensils className="h-4 w-4 text-napps-green" />
-                      <span>Dinner: 6:00 PM - 8:00 PM</span>
+                      <span>Dinner: {mealTimes.dinner}</span>
                     </div>
                   </div>
                 </div>

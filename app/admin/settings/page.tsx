@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,27 +7,19 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
-
-interface ConferenceSettings {
-  name: string
-  date: string
-  venue: string
-  theme: string
-  bankName: string
-  accountNumber: string
-  accountName: string
-}
+import { ConferenceDetails } from "@/lib/config-service"
 
 export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<ConferenceSettings>({
+  const [settings, setSettings] = useState<ConferenceDetails>({
     name: "",
     date: "",
     venue: "",
     theme: "",
     bankName: "Unity Bank",
     accountNumber: "0017190877",
-    accountName: "N.A.A.PS NASARAWA STATE",
+    accountName: "N.A.A.PS NASARAWA STATE"
   })
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
@@ -40,8 +31,19 @@ export default function AdminSettingsPage() {
   async function fetchSettings() {
     try {
       const response = await fetch('/api/admin/settings')
+      if (!response.ok) throw new Error('Failed to load settings')
       const data = await response.json()
-      setSettings(data)
+      
+      // Only update state with fields that exist in our interface
+      setSettings({
+        name: data.name || "",
+        date: data.date || "",
+        venue: data.venue || "",
+        theme: data.theme || "",
+        bankName: data.bankName || "Unity Bank",
+        accountNumber: data.accountNumber || "0017190877",
+        accountName: data.accountName || "N.A.A.PS NASARAWA STATE"
+      })
     } catch (error) {
       console.error('Error fetching settings:', error)
       toast({
@@ -57,16 +59,13 @@ export default function AdminSettingsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-
     try {
       const response = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       })
-
       if (!response.ok) throw new Error('Failed to save settings')
-
       toast({
         title: "Success",
         description: "Settings have been saved",
@@ -133,7 +132,7 @@ export default function AdminSettingsPage() {
                 <Label htmlFor="theme">Theme</Label>
                 <Input
                   id="theme"
-                  value={settings.theme}
+                  value={settings.theme || ""}
                   onChange={(e) => setSettings({ ...settings, theme: e.target.value })}
                 />
               </div>
@@ -149,7 +148,7 @@ export default function AdminSettingsPage() {
                 <Label htmlFor="bankName">Bank Name</Label>
                 <Input
                   id="bankName"
-                  value={settings.bankName}
+                  value={settings.bankName || ""}
                   onChange={(e) => setSettings({ ...settings, bankName: e.target.value })}
                 />
               </div>
@@ -158,7 +157,7 @@ export default function AdminSettingsPage() {
                 <Label htmlFor="accountNumber">Account Number</Label>
                 <Input
                   id="accountNumber"
-                  value={settings.accountNumber}
+                  value={settings.accountNumber || ""}
                   onChange={(e) => setSettings({ ...settings, accountNumber: e.target.value })}
                 />
               </div>
@@ -167,7 +166,7 @@ export default function AdminSettingsPage() {
                 <Label htmlFor="accountName">Account Name</Label>
                 <Input
                   id="accountName"
-                  value={settings.accountName}
+                  value={settings.accountName || ""}
                   onChange={(e) => setSettings({ ...settings, accountName: e.target.value })}
                 />
               </div>
