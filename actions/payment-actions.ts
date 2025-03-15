@@ -45,62 +45,71 @@ export async function uploadPaymentProof(formData: FormData) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const file = formData.get('file') as File | null
-  const reference = formData.get('reference') as string | null
-
-  if (!file) throw new Error('No file provided')
-  if (!reference) throw new Error('No payment reference provided')
-
-  // Validate file type
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF')
-  }
-
-  // Validate file size (5MB)
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error('File too large. Maximum size is 5MB')
-  }
-
   try {
-    // Check if payment reference exists and is valid
-    const paymentCheck = await query(
-      'SELECT payment_status FROM profiles WHERE payment_reference = $1 AND id = $2',
-      [reference, session.user.id]
-    )
+    const file = formData.get('file') as File;
+    const reference = formData.get('reference') as string;
 
-    if (paymentCheck.rowCount === 0) {
-      throw new Error('Invalid payment reference')
+    if (!file) {
+      throw new Error('No file provided');
+    }
+    if (!reference) {
+      throw new Error('No payment reference provided');
     }
 
-    if (paymentCheck.rows[0].payment_status === 'completed') {
-      throw new Error('Payment already completed')
+    // Validate payment reference exists and belongs to user
+    const payment = await query(
+      'SELECT payment_status FROM profiles WHERE id = $1 AND payment_reference = $2',
+      [session.user.id, reference]
+    );
+
+    if (payment.rowCount === 0) {
+      throw new Error('Invalid payment reference');
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const ext = file.name.split('.').pop()
-    const fileName = `payment-proofs/${session.user.id}-${uuidv4()}.${ext}`
-    
-    const storage = StorageService.getInstance()
-    const fileUrl = await storage.uploadFile(buffer, fileName, file.type)
+    if (payment.rows[0].payment_status === 'completed') {
+      throw new Error('Payment already completed');
+    }
 
-    // Save file URL to database in the profiles table
-    await query(
-      `UPDATE profiles 
-       SET payment_proof = $1, 
-           payment_status = 'proof_submitted',
-           updated_at = NOW() 
-       WHERE id = $2 AND payment_reference = $3`,
-      [fileUrl, session.user.id, reference]
-    )
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const maxSize = 5 * 1024 * 1024; // 5MB
 
-    revalidatePath('/payment')
-    revalidatePath('/admin/payments')
+    if (file.size > maxSize) {
+      throw new Error('File size too large. Maximum size is 5MB');
+    }
+
+    if (!['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)) {
+      throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF');
+    }
+
+    const fileName = `payment-proofs/${session.user.id}-${Date.now()}-${file.name}`;
+    const storage = StorageService.getInstance();
     
-    return { success: true, url: fileUrl }
+    try {
+      const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
+      
+      // Update the database with the proof URL and status
+      await query(
+        `UPDATE profiles 
+         SET payment_proof = $1,
+             payment_status = 'proof_submitted',
+             updated_at = NOW()
+         WHERE id = $2 AND payment_reference = $3`,
+        [fileUrl, session.user.id, reference]
+      );
+
+      revalidatePath('/payment');
+      revalidatePath('/participant/dashboard');
+      revalidatePath('/admin/payments');
+
+      return { success: true, fileUrl };
+    } catch (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      throw new Error('Failed to upload file to storage');
+    }
+
   } catch (error: any) {
-    console.error('Error uploading payment proof:', error)
-    throw new Error(error.message || 'Failed to upload payment proof')
+    console.error('Error uploading payment proof:', error);
+    throw error;
   }
 }
 
