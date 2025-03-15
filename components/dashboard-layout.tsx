@@ -12,11 +12,11 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, role, title }: DashboardLayoutProps) {
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr]">
+    <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
       <DashboardSidebar role={role} />
-      <div className="flex flex-col">
+      <div className="flex flex-col w-full">
         <DashboardHeader role={role} title={title} />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-4 md:p-6 w-full">{children}</main>
       </div>
     </div>
   )

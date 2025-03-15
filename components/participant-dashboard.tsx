@@ -82,7 +82,7 @@ export function ParticipantDashboard() {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="w-full grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="md:col-span-2 lg:col-span-3 border-napps-gold/30">
           <CardContent className="flex items-center justify-center min-h-[200px]">
             <p>Loading dashboard data...</p>
@@ -93,9 +93,9 @@ export function ParticipantDashboard() {
   }
 
   return (
-    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+    <div className="w-full grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
       {/* Conference Info Card */}
-      <Card className="col-span-1 md:col-span-2 lg:col-span-3 border-napps-gold/30 card-glow">
+      <Card className="w-full col-span-1 md:col-span-2 lg:col-span-3 border-napps-gold/30 card-glow">
         <CardContent className="pt-6 px-4 sm:px-6">
           <div className="space-y-4">
             <h2 className="text-xl sm:text-2xl font-bold text-napps-gold text-shadow-sm break-words">
@@ -115,7 +115,7 @@ export function ParticipantDashboard() {
         </CardContent>
       </Card>
       {/* Payment Status Card */}
-      <Card className="border-napps-gold/30">
+      <Card className="w-full border-napps-gold/30">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <CreditCard className="h-5 w-5 text-napps-gold" />
@@ -142,7 +142,7 @@ export function ParticipantDashboard() {
         </CardFooter>
       </Card>
       {/* Accreditation Status Card */}
-      <Card className="border-napps-gold/30">
+      <Card className="w-full border-napps-gold/30">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <User className="h-5 w-5 text-napps-gold" />
@@ -167,7 +167,7 @@ export function ParticipantDashboard() {
         </CardFooter>
       </Card>
       {/* Accommodation Status Card */}
-      <Card className="border-napps-gold/30">
+      <Card className="w-full border-napps-gold/30">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Hotel className="h-5 w-5 text-napps-gold" />
