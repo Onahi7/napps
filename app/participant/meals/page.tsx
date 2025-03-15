@@ -10,7 +10,8 @@ import { Progress } from "@/components/ui/progress"
 import { Coffee, Utensils, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { useAuth } from "@/lib/auth-hooks"
 import { getMealValidations } from "@/actions/profile-actions"
-import { getConferenceConfig } from "@/actions/config-actions";
+import { getConferenceConfig } from "@/actions/config-actions"
+
 
 interface MealStatus {
   status: "pending" | "validated" | "expired"
@@ -43,7 +44,7 @@ export default function ParticipantMeals() {
       try {
         const [validations, details] = await Promise.all([
           getMealValidations(user.id),
-          getConferenceDetails()
+          getConferenceConfig()
         ])
         
         setMealData(validations)

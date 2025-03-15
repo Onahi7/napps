@@ -103,7 +103,17 @@ export interface ConferenceHours {
 
 export async function getConferenceDetails(): Promise<ConferenceDetailsResponse> {
   const cachedConfig = await cache.get('conference_details')
-  if (cachedConfig) return cachedConfig
+  if (cachedConfig) {
+    const parsed = typeof cachedConfig === 'string' ? JSON.parse(cachedConfig) : cachedConfig
+    // Validate that parsed data has all required fields
+    if (typeof parsed === 'object' && parsed !== null &&
+        'name' in parsed && 'date' in parsed && 'venue' in parsed &&
+        'venue_address' in parsed && 'theme' in parsed &&
+        'registration_hours' in parsed && 'morning_hours' in parsed &&
+        'afternoon_hours' in parsed && 'evening_hours' in parsed) {
+      return parsed as ConferenceDetailsResponse
+    }
+  }
   
   const [name, date, venue, theme, venue_address, hours] = await Promise.all([
     getServerConfig<string>("conference_name", ""),
