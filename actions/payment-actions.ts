@@ -45,8 +45,11 @@ export async function uploadPaymentProof(formData: FormData) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const file = formData.get('file') as File
+  const file = formData.get('file') as File | null
+  const reference = formData.get('reference') as string | null
+
   if (!file) throw new Error('No file provided')
+  if (!reference) throw new Error('No payment reference provided')
 
   // Validate file type
   const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
@@ -60,10 +63,24 @@ export async function uploadPaymentProof(formData: FormData) {
   }
 
   try {
+    // Check if payment reference exists and is valid
+    const paymentCheck = await query(
+      'SELECT payment_status FROM profiles WHERE payment_reference = $1 AND id = $2',
+      [reference, session.user.id]
+    )
+
+    if (paymentCheck.rowCount === 0) {
+      throw new Error('Invalid payment reference')
+    }
+
+    if (paymentCheck.rows[0].payment_status === 'completed') {
+      throw new Error('Payment already completed')
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer())
     const ext = file.name.split('.').pop()
     const fileName = `payment-proofs/${session.user.id}-${uuidv4()}.${ext}`
-
+    
     const storage = StorageService.getInstance()
     const fileUrl = await storage.uploadFile(buffer, fileName, file.type)
 
@@ -73,16 +90,17 @@ export async function uploadPaymentProof(formData: FormData) {
        SET payment_proof = $1, 
            payment_status = 'proof_submitted',
            updated_at = NOW() 
-       WHERE id = $2`,
-      [fileUrl, session.user.id]
+       WHERE id = $2 AND payment_reference = $3`,
+      [fileUrl, session.user.id, reference]
     )
 
     revalidatePath('/payment')
     revalidatePath('/admin/payments')
+    
     return { success: true, url: fileUrl }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading payment proof:', error)
-    throw new Error('Failed to upload payment proof')
+    throw new Error(error.message || 'Failed to upload payment proof')
   }
 }
 
@@ -133,7 +151,7 @@ export async function getPaymentStatus() {
 }
 
 export async function getRegistrationAmount() {
-  return getConfig('registrationAmount') || 15000
+  return getConfig('registrationAmount') || 20000
 }
 
 // Function to verify registration payment

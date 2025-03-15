@@ -4,12 +4,17 @@ import { env } from './env';
 export class StorageService {
   private static instance: StorageService;
   private client: S3Client;
-  private bucketName = 'napps-store';
-  private region = 'sfo3';
+  private bucketName: string;
+  private region: string;
+  private endpoint: string;
 
   private constructor() {
+    this.bucketName = env.DO_SPACES_BUCKET;
+    this.region = env.DO_SPACES_REGION;
+    this.endpoint = 'https://napps-store.sfo3.digitaloceanspaces.com';
+
     this.client = new S3Client({
-      endpoint: `https://${this.region}.digitaloceanspaces.com`,
+      endpoint: this.endpoint,
       region: this.region,
       credentials: {
         accessKeyId: env.DO_SPACES_KEY,
@@ -35,7 +40,7 @@ export class StorageService {
     });
 
     await this.client.send(command);
-    return `https://${this.bucketName}.${this.region}.digitaloceanspaces.com/${fileName}`;
+    return `${this.endpoint}/${fileName}`;
   }
 
   async deleteFile(fileName: string): Promise<void> {

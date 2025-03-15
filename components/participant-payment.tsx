@@ -105,39 +105,45 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
   }
 
   const handleProofUpload = async () => {
-    if (!selectedFile || !reference || uploading) return
+    if (!selectedFile || !reference || uploading) return;
 
-    setUploading(true)
-    setIsUploadDisabled(true)
-    const formData = new FormData()
-    formData.append('file', selectedFile)
-    formData.append('reference', reference)
+    setUploading(true);
+    setIsUploadDisabled(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('reference', reference);
 
     try {
-      await uploadPaymentProof(formData)
+      const result = await uploadPaymentProof(formData);
 
-      toast({
-        title: "Success",
-        description: "Payment proof uploaded successfully",
-      })
+      if (result.success) {
+        toast({
+          title: "Upload Successful",
+          description: "Your payment proof has been submitted successfully. Please wait while admin reviews your payment. You will receive accreditation once your payment is confirmed.",
+        });
 
-      // Refresh the page to show updated status
-      window.location.reload()
+        // Refresh the page to show updated status after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        throw new Error("Upload failed");
+      }
     } catch (error: any) {
-      console.error('Error uploading proof:', error)
+      console.error('Error uploading proof:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to upload payment proof",
+        description: error.message || "Failed to upload payment proof. Please try again.",
         variant: "destructive",
-      })
-      setSelectedFile(null) // Clear selected file on error
-      const fileInput = document.getElementById('proof') as HTMLInputElement
-      if (fileInput) fileInput.value = '' // Clear the file input
+      });
+      setSelectedFile(null); // Clear selected file on error
+      const fileInput = document.getElementById('proof') as HTMLInputElement;
+      if (fileInput) fileInput.value = ''; // Clear the file input
     } finally {
-      setUploading(false)
-      setIsUploadDisabled(false)
+      setUploading(false);
+      setIsUploadDisabled(false);
     }
-  }
+  };
 
   if (status === 'completed') {
     return (

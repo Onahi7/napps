@@ -14,6 +14,8 @@ export const env = createEnv({
     PAYSTACK_SECRET_KEY: z.string(),
     DO_SPACES_KEY: z.string(),
     DO_SPACES_SECRET: z.string(),
+    DO_SPACES_BUCKET: z.string().default('napps-store'),
+    DO_SPACES_REGION: z.string().default('sfo3'),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.string().url(),
@@ -33,6 +35,8 @@ export const env = createEnv({
     NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
     DO_SPACES_KEY: process.env.DO_SPACES_KEY,
     DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,
+    DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET,
+    DO_SPACES_REGION: process.env.DO_SPACES_REGION,
   },
 })
 
