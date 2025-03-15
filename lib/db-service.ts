@@ -3,6 +3,16 @@ import { DatabaseMonitor } from './db-monitor'
 import { CacheService } from './cache'
 import { DbMetrics } from './database.types'
 
+// Define PostgreSQL error interface
+interface PostgresError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+  schema?: string;
+  table?: string;
+  column?: string;
+}
+
 export class DatabaseService {
   private static instance: DatabaseService
   private pool: Pool
@@ -81,19 +91,20 @@ export class DatabaseService {
     callback: (client: PoolClient) => Promise<T>,
     retries: number = 3
   ): Promise<T> {
-    let lastError: Error | null = null
+    let lastError: PostgresError | null = null;
     
     for (let attempt = 0; attempt < retries; attempt++) {
-      const client = await this.pool.connect()
+      const client = await this.pool.connect();
       
       try {
-        await client.query('BEGIN')
-        const result = await callback(client)
-        await client.query('COMMIT')
-        return result
-      } catch (error: any) {
-        await client.query('ROLLBACK')
-        lastError = error
+        await client.query('BEGIN');
+        const result = await callback(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        const error = err as PostgresError;
+        await client.query('ROLLBACK');
+        lastError = error;
         
         // Check if error is retryable
         if (
@@ -101,17 +112,17 @@ export class DatabaseService {
           error.code === '40P01' || // Deadlock detected
           error.code === '55P03'    // Lock not available
         ) {
-          await new Promise(resolve => setTimeout(resolve, Math.random() * 1000))
-          continue
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
+          continue;
         }
         
-        throw error
+        throw error;
       } finally {
-        client.release()
+        client.release();
       }
     }
     
-    throw lastError || new Error('Transaction failed after retries')
+    throw lastError || new Error('Transaction failed after retries');
   }
 
   // Batch operations with cursor
@@ -138,6 +149,10 @@ export class DatabaseService {
       
       await client.query('CLOSE batch_cursor')
       await client.query('COMMIT')
+    } catch (err) {
+      const error = err as Error
+      console.error('Error in batch processing:', error)
+      throw error
     } finally {
       client.release()
     }

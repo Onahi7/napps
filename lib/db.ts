@@ -12,12 +12,12 @@ export const pool = new Pool({
     rejectUnauthorized: false,  // Always allow self-signed certificates
     checkServerIdentity: () => undefined  // Skip hostname check
   } : false,
-  // Reduced connection pool for better Next.js compatibility
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-  statement_timeout: 30000,
-  query_timeout: 5000,
+  // Improved connection settings for more reliable connections
+  max: 15,                          // Increased from 10 to handle more concurrent requests
+  idleTimeoutMillis: 60000,         // Increased from 30s to 60s
+  connectionTimeoutMillis: 10000,   // Increased from 2s to 10s
+  statement_timeout: 60000,         // Increased from 30s to 60s
+  query_timeout: 30000,             // Increased from 5s to 30s
   application_name: 'napps_summit',
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000
@@ -26,60 +26,125 @@ export const pool = new Pool({
 // Initialize database monitoring
 const monitor = DatabaseMonitor.getInstance(pool)
 
-// Helper to get a client from the pool with error handling
-export async function getClient() {
-  const client = await pool.connect()
-  const release = client.release.bind(client)
-
-  // Override release method to catch errors
-  client.release = () => {
-    client.release = release
-    return release()
-  }
-
-  return client
-}
-
-// Helper for single queries
-export async function query(text: string, params?: any[]) {
-  const start = Date.now()
-  try {
-    const result = await pool.query(text, params)
-    const duration = Date.now() - start
-
-    // Log slow queries (over 1 second)
-    if (duration > 1000) {
-      console.warn('Slow query:', { text, duration, rows: result.rowCount })
+// Helper to get a client from the pool with error handling and retry capability
+export async function getClient(retries = 3, delay = 1000) {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const client = await pool.connect();
+      const release = client.release.bind(client);
+      
+      // Override release method to catch errors
+      client.release = () => {
+        client.release = release;
+        return release();
+      };
+      
+      return client;
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error(`Database connection attempt ${attempt + 1}/${retries} failed:`, error.message);
+      lastError = error;
+      
+      // Only wait if we're going to retry
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-
-    return result
-  } catch (error: any) {
-    console.error('Query error:', { text, error: error.message })
-    throw error
   }
+  
+  throw lastError || new Error('Failed to get database client after retries');
 }
 
-// Transaction helper with automatic rollback on error
+// Helper for single queries with retry capability
+export async function query(text: string, params?: any[], retries = 2) {
+  const start = Date.now();
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const result = await pool.query(text, params);
+      const duration = Date.now() - start;
+
+      if (duration > 1000) {
+        console.warn('Slow query:', { text, duration, rows: result.rowCount });
+      }
+
+      return result;
+    } catch (err) {
+      const error = err as Error;
+      console.error(`Query attempt ${attempt + 1}/${retries} failed:`, { text, error: error.message });
+      lastError = error;
+      
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+  
+  console.error('Query failed after all retries:', { text });
+  throw lastError || new Error('Query failed after all retries');
+}
+
+// Transaction helper with automatic rollback on error and retry capability
 export async function withTransaction<T>(
-  callback: (client: any) => Promise<T>
+  callback: (client: any) => Promise<T>,
+  retries = 2
 ): Promise<T> {
-  const client = await getClient()
-  try {
-    await client.query('BEGIN')
-    const result = await callback(client)
-    await client.query('COMMIT')
-    return result
-  } catch (e) {
-    await client.query('ROLLBACK')
-    throw e
-  } finally {
-    client.release()
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const client = await getClient();
+    
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      lastError = err as Error;
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        const error = rollbackErr as Error;
+        console.error('Error during transaction rollback:', error);
+      }
+      
+      const errorMessage = String(lastError);
+      const retryableError = 
+        errorMessage.includes('connection') || 
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('Connection terminated');
+        
+      if (!retryableError || attempt >= retries - 1) {
+        throw lastError;
+      }
+      
+      console.log(`Retrying transaction after error: ${errorMessage}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      client.release();
+    }
   }
+  
+  throw lastError || new Error('Transaction failed after retries');
 }
 
-// Health check function
-export async function checkDatabaseHealth() {
-  return await monitor.checkHealth()
+// Health check function with timeout
+export async function checkDatabaseHealth(timeout = 5000) {
+  try {
+    const healthCheckPromise = monitor.checkHealth();
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Database health check timed out')), timeout);
+    });
+    
+    return await Promise.race([healthCheckPromise, timeoutPromise]);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('Database health check failed:', error);
+    return false;
+  }
 }
 
 // Get database metrics

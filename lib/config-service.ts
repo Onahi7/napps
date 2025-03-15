@@ -131,7 +131,7 @@ export async function getConferenceConfig() {
 // Initialize default configuration
 export async function initializeDefaultConfig(): Promise<void> {
   const defaultConfig = {
-    registrationAmount: 15000,
+    registrationAmount: 20000,
     conference_name: '6th Annual NAPPS North Central Zonal Education Summit 2025',
     conference_date: 'May 21-22, 2025',
     conference_venue: 'Lafia City Hall, Lafia',

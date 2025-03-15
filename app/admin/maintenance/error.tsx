@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { AlertCircle } from 'lucide-react'
 
+interface MaintenanceErrorProps {
+  error: Error
+  reset: () => void
+}
+
 export default function MaintenanceError({
   error,
   reset,
-}: {
-  error: Error & { digest?: string }
-  reset: () => void
-}) {
+}: MaintenanceErrorProps) {
   return (
     <div className="container mx-auto p-6">
       <Card className="p-6 border-destructive">
@@ -28,6 +30,11 @@ export default function MaintenanceError({
               Refresh Page
             </Button>
           </div>
+          {process.env.NODE_ENV !== 'production' && (
+            <div className="mt-4 w-full max-w-[500px] rounded-md bg-destructive/10 p-4 text-left text-sm text-destructive">
+              <pre className="whitespace-pre-wrap">{error.stack}</pre>
+            </div>
+          )}
         </div>
       </Card>
     </div>

@@ -12,27 +12,34 @@ export class MigrationManager {
   }
 
   async initialize() {
-    // Create migrations table if it doesn't exist
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      )
-    `)
+    const client = await this.pool.connect()
+    try {
+      // Create migrations table if it doesn't exist
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS migrations (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+    } finally {
+      client.release()
+    }
   }
 
   async getAppliedMigrations(): Promise<string[]> {
-    const result = await this.pool.query(
-      'SELECT name FROM migrations ORDER BY id'
+    const { rows } = await this.pool.query(
+      'SELECT name FROM migrations ORDER BY applied_at'
     )
-    return result.rows.map(row => row.name)
+    return rows.map(row => row.name)
   }
 
   async getMigrationFiles(): Promise<string[]> {
-    return fs.readdirSync(this.migrationsDir)
-      .filter(file => file.endsWith('.sql'))
-      .sort()
+    // Get all SQL files that don't end with .down.sql
+    const files = fs.readdirSync(this.migrationsDir)
+      .filter(file => file.endsWith('.sql') && !file.endsWith('.down.sql'))
+      .sort() // Sort alphabetically so they run in order
+    return files
   }
 
   async applyMigration(fileName: string): Promise<void> {
@@ -54,8 +61,10 @@ export class MigrationManager {
 
       await client.query('COMMIT')
       console.log(`Applied migration: ${fileName}`)
-    } catch (error) {
+    } catch (err: unknown) {
+      const error = err as Error;
       await client.query('ROLLBACK')
+      console.error(`Migration failed: ${fileName}`, error);
       throw error
     } finally {
       client.release()
@@ -101,8 +110,10 @@ export class MigrationManager {
       }
 
       await client.query('COMMIT')
-    } catch (error) {
+    } catch (err: unknown) {
+      const error = err as Error;
       await client.query('ROLLBACK')
+      console.error('Rollback failed:', error);
       throw error
     } finally {
       client.release()

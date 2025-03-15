@@ -1,64 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
-import { DatabaseService } from '@/lib/db-service'
+import { isAdmin } from '@/lib/auth'
 import { DatabaseMaintenance } from '@/lib/db-maintenance'
-import { Pool } from 'pg'
-import { env } from '@/lib/env'
-import { z } from 'zod'
 
-const maintenanceActionSchema = z.object({
-  action: z.enum(['vacuum', 'reindex', 'cleanup', 'optimize', 'kill_idle', 'reset_pool', 'full_maintenance'])
-})
-
-const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-  ssl: env.DATABASE_SSL ? {
-    rejectUnauthorized: false
-  } : false
-})
-
-const dbService = DatabaseService.getInstance(pool)
-const maintenance = new DatabaseMaintenance(pool)
+// Maintenance error type
+interface MaintenanceError extends Error {
+  code?: string;
+  details?: unknown;
+}
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      return new NextResponse('Unauthorized', { status: 401 })
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
-    // Verify admin role
-    const searchResult = await dbService.searchProfiles(session.user.id, {
-      role: 'admin',
-      limit: 1
-    })
-
-    if (!searchResult.length) {
-      return new NextResponse('Forbidden', { status: 403 })
+    // Verify admin access
+    const admin = await isAdmin(session.user.id)
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Admin access required' },
+        { status: 403 }
+      )
     }
 
-    // Get database statistics
-    const [tableStats, dbSize, connStats] = await Promise.all([
-      maintenance.getTableStats(),
-      maintenance.getDatabaseSize(),
-      maintenance.getConnectionStats()
-    ])
+    const maintenance = DatabaseMaintenance.getInstance()
+    const status = await maintenance.checkStatus()
 
     return NextResponse.json({
       status: 'success',
-      timestamp: new Date().toISOString(),
-      statistics: {
-        tables: tableStats,
-        size: dbSize,
-        connections: connStats
-      }
+      data: status,
+      timestamp: new Date().toISOString()
     })
-  } catch (error: any) {
-    console.error('Maintenance API error:', error)
+  } catch (err) {
+    const error = err as MaintenanceError;
+    console.error('Maintenance status check error:', error)
     return NextResponse.json({
       status: 'error',
-      message: error.message
+      message: error.message,
+      details: error.details
     }, { status: 500 })
   }
 }
@@ -67,31 +52,30 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      return new NextResponse('Unauthorized', { status: 401 })
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
-    // Verify admin role
-    const searchResult = await dbService.searchProfiles(session.user.id, {
-      role: 'admin',
-      limit: 1
-    })
-
-    if (!searchResult.length) {
-      return new NextResponse('Forbidden', { status: 403 })
+    // Verify admin access
+    const admin = await isAdmin(session.user.id)
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Admin access required' },
+        { status: 403 }
+      )
     }
 
-    const data = await req.json()
-    
-    // Validate the request data
-    const result = maintenanceActionSchema.safeParse(data)
-    if (!result.success) {
+    const { action } = await req.json()
+    if (!action) {
       return NextResponse.json({
         status: 'error',
-        message: 'Invalid maintenance action'
+        message: 'Maintenance action is required'
       }, { status: 400 })
     }
 
-    const { action } = result.data
+    const maintenance = DatabaseMaintenance.getInstance()
 
     switch (action) {
       case 'vacuum':
@@ -100,7 +84,7 @@ export async function POST(req: NextRequest) {
       case 'reindex':
         await maintenance.reindexTables()
         break
-      case 'cleanup':
+      case 'cleanup_old':
         await maintenance.cleanupOldScans()
         break
       case 'optimize':
@@ -127,11 +111,13 @@ export async function POST(req: NextRequest) {
       message: `Maintenance action '${action}' completed successfully`,
       timestamp: new Date().toISOString()
     })
-  } catch (error: any) {
+  } catch (err) {
+    const error = err as MaintenanceError;
     console.error('Maintenance API error:', error)
     return NextResponse.json({
       status: 'error',
-      message: error.message
+      message: error.message,
+      details: error.details
     }, { status: 500 })
   }
 }

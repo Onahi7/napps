@@ -19,12 +19,12 @@ export class DatabaseMonitor {
     return DatabaseMonitor.instance;
   }
 
-  // Add the checkHealth method
   async checkHealth(): Promise<boolean> {
     try {
       await this.pool.query('SELECT 1');
       return true;
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error('Database health check failed:', error);
       return false;
     }

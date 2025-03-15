@@ -1,6 +1,6 @@
 import { Pool } from 'pg'
-import { DatabaseMaintenance } from '../lib/db-maintenance'
-import { CacheService } from '../lib/cache'
+import { DatabaseMaintenance } from '@/lib/db-maintenance'
+import { CacheService } from '@/lib/cache'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -13,7 +13,8 @@ async function maintainDatabase() {
     } : false
   })
 
-  const maintenance = new DatabaseMaintenance(pool)
+  // Use getInstance instead of constructor
+  const maintenance = DatabaseMaintenance.getInstance()
   const cache = CacheService.getInstance()
 
   try {

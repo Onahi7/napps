@@ -3,13 +3,12 @@
 import { useEffect } from 'react'
 import { Icons } from '@/components/icons'
 
-export default function Error({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string }
+interface ErrorProps {
+  error: Error
   reset: () => void
-}) {
+}
+
+export default function Error({ error, reset }: ErrorProps) {
   useEffect(() => {
     // Log to an error reporting service in production
     if (process.env.NODE_ENV === 'production') {
@@ -41,6 +40,9 @@ export default function Error({
       {process.env.NODE_ENV !== 'production' && (
         <div className="mt-4 max-w-md rounded-md bg-destructive/10 p-4 text-left text-sm text-destructive">
           <pre>{error.message}</pre>
+          {error.stack && (
+            <pre className="mt-2 text-xs opacity-80">{error.stack}</pre>
+          )}
         </div>
       )}
     </div>

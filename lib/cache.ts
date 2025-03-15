@@ -141,15 +141,17 @@ export class CacheService {
     ttlSeconds: number = 300 // 5 minutes default
   ): Promise<T> {
     try {
-      const cached = await this.get<T>(key)
-      if (cached) return cached
-
-      const fresh = await fetchFn()
-      await this.set(key, fresh, ttlSeconds)
-      return fresh
-    } catch (error) {
-      console.warn('Cache wrapper failed:', error)
-      return fetchFn() // Fallback to direct fetch if cache fails
+      const cachedData = await this.get<T>(key)
+      if (cachedData) return cachedData
+      
+      const freshData = await fetchFn()
+      await this.set(key, freshData, ttlSeconds)
+      return freshData
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Cache error:', error.message)
+      // On cache error, bypass cache and fetch directly
+      return fetchFn()
     }
   }
 
@@ -157,8 +159,9 @@ export class CacheService {
   async flush(): Promise<void> {
     try {
       await this.redis.flushall()
-    } catch (error) {
-      console.warn('Cache flush failed:', error)
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Error flushing cache:', error.message)
     }
   }
 
@@ -167,7 +170,9 @@ export class CacheService {
     try {
       const result = await this.redis.ping()
       return result === 'PONG'
-    } catch {
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Redis ping error:', error.message)
       return false
     }
   }

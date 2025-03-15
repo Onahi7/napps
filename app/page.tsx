@@ -117,12 +117,12 @@ export default function HomePage() {
           <Card className="border-napps-green/20 dark:border-napps-green/30">
             <CardHeader>
               <QrCode className="h-8 w-8 text-napps-green mb-2" />
-              <CardTitle>QR System</CardTitle>
+              <CardTitle>QR System/Phone Verification</CardTitle>
               <CardDescription>Seamless conference experience</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 dark:text-gray-300">
-                Our QR code system makes conference accreditation and meal validation quick and easy for all
+                Our QR code system makes conference accreditation and validation quick and easy for all
                 participants.
               </p>
             </CardContent>
@@ -198,8 +198,8 @@ export default function HomePage() {
             </div>
             <div>
               <h3 className="text-xl font-bold mb-4">Contact Us</h3>
-              <p className="text-napps-gold">Email: info@nappsconference.org</p>
-              <p className="text-napps-gold">Phone: +234 123 456 7890</p>
+              <p className="text-napps-gold">Email: nappsnasstate25</p>
+              <p className="text-napps-gold">Phone: 08030822969</p>
             </div>
           </div>
           <div className="border-t border-napps-green-dark mt-8 pt-8 text-center text-napps-gold">

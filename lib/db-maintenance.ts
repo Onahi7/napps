@@ -1,13 +1,22 @@
 import { Pool } from 'pg'
 import { DatabaseMonitor } from './db-monitor'
+import { pool } from './db'
 
 export class DatabaseMaintenance {
+  private static instance: DatabaseMaintenance;
   private pool: Pool
   private monitor: DatabaseMonitor
 
-  constructor(pool: Pool) {
+  private constructor() {
     this.pool = pool
     this.monitor = DatabaseMonitor.getInstance()
+  }
+
+  public static getInstance(): DatabaseMaintenance {
+    if (!DatabaseMaintenance.instance) {
+      DatabaseMaintenance.instance = new DatabaseMaintenance();
+    }
+    return DatabaseMaintenance.instance;
   }
 
   async vacuumAnalyze(): Promise<void> {
@@ -138,6 +147,31 @@ export class DatabaseMaintenance {
     } catch (error) {
       console.error('Database maintenance failed:', error)
       throw error
+    }
+  }
+
+  async checkStatus(): Promise<Record<string, any>> {
+    try {
+      const [size, stats, connections] = await Promise.all([
+        this.getDatabaseSize(),
+        this.getTableStats(),
+        this.getConnectionStats()
+      ]);
+
+      return {
+        size,
+        tableStats: stats,
+        connections,
+        healthy: true,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Database status check failed:', error);
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
     }
   }
 }
