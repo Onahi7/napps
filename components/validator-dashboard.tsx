@@ -12,7 +12,7 @@ import { ArrowRight, BarChart, Calendar, CheckCircle, Clock, Coffee, QrCode } fr
 import { useAuth } from "@/lib/auth-hooks"
 import { getScanStats } from "@/actions/scan-actions"
 import { useToast } from "@/hooks/use-toast"
-import { getValidatorAssignments } from "@/actions/assignment-actions"
+import { getAllAssignments } from "@/actions/assignment-actions"
 
 interface Assignment {
   id: string
@@ -51,7 +51,7 @@ export default function ValidatorDashboard() {
     try {
       const [stats, assignmentData] = await Promise.all([
         getScanStats(),
-        getValidatorAssignments(user.id)
+        getAllAssignments()
       ])
       
       setScanData({

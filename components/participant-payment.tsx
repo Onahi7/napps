@@ -103,22 +103,11 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
     setUploading(true)
     const formData = new FormData()
     formData.append('file', selectedFile)
+    formData.append('reference', reference)
 
     try {
-      // Upload the file first
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file')
-      }
-
-      const { url } = await uploadResponse.json()
-
-      // Now save the proof URL
-      await uploadPaymentProof(reference, url)
+      // Upload proof directly using the server action
+      await uploadPaymentProof(formData)
 
       toast({
         title: "Success",

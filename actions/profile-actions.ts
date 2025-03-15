@@ -204,6 +204,6 @@ export async function getNotifications() {
 
   return result.rows.map(row => ({
     ...row,
-    time: new Date(row.time).toRelative()
+    time: new Date(row.time).toISOString()
   }))
 }

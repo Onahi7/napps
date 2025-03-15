@@ -106,22 +106,10 @@ export default function PaymentPage() {
       // Create form data
       const formData = new FormData();
       formData.append('file', paymentProofFile);
-
-      // Upload file
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json();
-        throw new Error(error.message || 'Failed to upload file');
-      }
-
-      const { url } = await uploadResponse.json();
-
-      // Update payment proof in database
-      await uploadPaymentProof(paymentReference, url);
+      formData.append('reference', paymentReference);
+      
+      // Upload proof directly using the server action
+      await uploadPaymentProof(formData);
       
       toast({
         title: "Success",

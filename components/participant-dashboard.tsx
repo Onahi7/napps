@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { CalendarDays, MapPin, CreditCard, Hotel, FileText, User } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-hooks"
-import { getRegistrationAmount, getConferenceDetails } from "@/lib/config-service"
+import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
 import { getParticipantStatus } from "@/actions/profile-actions"
 
 type PaymentStatus = "pending" | "completed" | "failed"
@@ -17,11 +17,14 @@ type AccommodationStatus = "not_booked" | "booked" | "checked_in"
 export function ParticipantDashboard() {
   const { user, profile } = useAuth()
   const [registrationAmount, setRegistrationAmount] = useState<number>(0)
-  const [conferenceDetails, setConferenceDetails] = useState({
+  const [conferenceDetails, setConferenceDetails] = useState<ConferenceDetails>({
     name: "",
     date: "",
     venue: "",
-    theme: ""
+    theme: "",
+    bankName: "",
+    accountNumber: "",
+    accountName: ""
   })
   const [isLoading, setIsLoading] = useState(true)
   const [status, setStatus] = useState({
@@ -41,7 +44,11 @@ export function ParticipantDashboard() {
         
         setRegistrationAmount(amount)
         setConferenceDetails(details)
-        setStatus(participantStatus)
+        setStatus(participantStatus || {
+          payment: "pending",
+          accreditation: "pending",
+          accommodation: "not_booked"
+        })
       } catch (error) {
         console.error("Error loading dashboard data:", error)
       } finally {
