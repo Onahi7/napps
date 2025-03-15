@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate": "ts-node --esm ./scripts/init-database.ts",
+    "migrate": "NODE_OPTIONS='--loader ts-node/esm' ts-node --experimentalSpecifierResolution node ./scripts/init-database.ts",
     "migrate:down": "ts-node --esm ./scripts/cleanup-supabase.ts",
     "deploy": "bash ./scripts/deploy.sh",
     "test": "jest",

@@ -1,8 +1,8 @@
 import { Pool } from 'pg';
-import { MigrationManager } from '../lib/migration-manager.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import dotenv from 'dotenv';
+import { MigrationManager } from '../lib/migration-manager.js';
 
 dotenv.config();
 
