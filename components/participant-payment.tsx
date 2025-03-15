@@ -24,6 +24,7 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
   const [uploading, setUploading] = useState(false)
   const [bankDetails, setBankDetails] = useState<any>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isUploadDisabled, setIsUploadDisabled] = useState(false)
   const { toast } = useToast()
 
   // Fetch bank details when bank transfer tab is selected
@@ -53,6 +54,8 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (uploading) return // Prevent file selection while uploading
+    
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -63,6 +66,8 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
         description: "Please upload a JPEG, PNG image or PDF file",
         variant: "destructive",
       })
+      event.target.value = '' // Clear the input
+      setSelectedFile(null)
       return
     }
 
@@ -73,6 +78,8 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
         description: "Maximum file size is 5MB",
         variant: "destructive",
       })
+      event.target.value = '' // Clear the input
+      setSelectedFile(null)
       return
     }
 
@@ -98,15 +105,15 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
   }
 
   const handleProofUpload = async () => {
-    if (!selectedFile || !reference) return
+    if (!selectedFile || !reference || uploading) return
 
     setUploading(true)
+    setIsUploadDisabled(true)
     const formData = new FormData()
     formData.append('file', selectedFile)
     formData.append('reference', reference)
 
     try {
-      // Upload proof directly using the server action
       await uploadPaymentProof(formData)
 
       toast({
@@ -116,15 +123,19 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
 
       // Refresh the page to show updated status
       window.location.reload()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading proof:', error)
       toast({
         title: "Error",
-        description: "Failed to upload payment proof",
+        description: error.message || "Failed to upload payment proof",
         variant: "destructive",
       })
+      setSelectedFile(null) // Clear selected file on error
+      const fileInput = document.getElementById('proof') as HTMLInputElement
+      if (fileInput) fileInput.value = '' // Clear the file input
     } finally {
       setUploading(false)
+      setIsUploadDisabled(false)
     }
   }
 
@@ -299,6 +310,8 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
                   type="file"
                   accept="image/jpeg,image/png,image/jpg,application/pdf"
                   onChange={handleFileChange}
+                  disabled={uploading}
+                  className={uploading ? "opacity-50 cursor-not-allowed" : ""}
                 />
                 <p className="text-sm text-muted-foreground">
                   Maximum file size: 5MB. Supported formats: JPEG, PNG, PDF
@@ -307,13 +320,13 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
 
               <Button 
                 onClick={handleProofUpload}
-                disabled={uploading || !selectedFile}
-                className="w-full"
+                disabled={uploading || !selectedFile || isUploadDisabled}
+                className="w-full relative"
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin absolute left-4" />
+                    <span className="pl-6">Uploading...</span>
                   </>
                 ) : (
                   <>

@@ -93,40 +93,41 @@ export function ParticipantDashboard() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
       {/* Conference Info Card */}
-      <Card className="md:col-span-2 lg:col-span-3 border-napps-gold/30 card-glow">
-        <CardContent className="pt-6">
-          <h2 className="text-2xl font-bold text-napps-gold text-shadow-sm mb-2">
-            {conferenceDetails.name}
-          </h2>
-          <div className="flex flex-col md:flex-row gap-4 text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" />
-              <span>{conferenceDetails.date}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              <span>{conferenceDetails.venue}</span>
+      <Card className="col-span-1 md:col-span-2 lg:col-span-3 border-napps-gold/30 card-glow">
+        <CardContent className="pt-6 px-4 sm:px-6">
+          <div className="space-y-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-napps-gold text-shadow-sm break-words">
+              {conferenceDetails.name}
+            </h2>
+            <div className="flex flex-col sm:flex-row gap-4 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 flex-shrink-0" />
+                <span className="text-sm sm:text-base">{conferenceDetails.date}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 flex-shrink-0" />
+                <span className="text-sm sm:text-base break-words">{conferenceDetails.venue}</span>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
       {/* Payment Status Card */}
       <Card className="border-napps-gold/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <CreditCard className="h-5 w-5 text-napps-gold" />
             Payment Status
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-muted-foreground">Registration Fee:</span>
-            <span className="text-xl font-bold">₦{registrationAmount.toLocaleString()}</span>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <span className="text-sm sm:text-base text-muted-foreground">Registration Fee:</span>
+            <span className="text-lg sm:text-xl font-bold">₦{20000 - registrationAmount}</span>
           </div>
-          <Badge variant={getBadgeVariant(status.payment, 'payment')}>
+          <Badge variant={getBadgeVariant(status.payment, 'payment')} className="whitespace-normal text-center w-full sm:w-auto">
             {status.payment === "completed" ? "Paid" : 
              status.payment === "proof_submitted" ? "Proof Submitted" : 
              "Pending Payment"}
@@ -140,17 +141,16 @@ export function ParticipantDashboard() {
           )}
         </CardFooter>
       </Card>
-
       {/* Accreditation Status Card */}
       <Card className="border-napps-gold/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <User className="h-5 w-5 text-napps-gold" />
             Accreditation
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Badge variant={getBadgeVariant(status.accreditation, 'accreditation')}>
+          <Badge variant={getBadgeVariant(status.accreditation, 'accreditation')} className="whitespace-normal text-center w-full sm:w-auto">
             {status.accreditation === "completed"
               ? "Accredited"
               : status.accreditation === "declined"
@@ -166,17 +166,16 @@ export function ParticipantDashboard() {
           </Button>
         </CardFooter>
       </Card>
-
       {/* Accommodation Status Card */}
       <Card className="border-napps-gold/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Hotel className="h-5 w-5 text-napps-gold" />
             Accommodation
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Badge variant={getBadgeVariant(status.accommodation, 'accommodation')}>
+          <Badge variant={getBadgeVariant(status.accommodation, 'accommodation')} className="whitespace-normal text-center w-full sm:w-auto">
             {status.accommodation === "checked_in"
               ? "Checked In"
               : status.accommodation === "booked"
