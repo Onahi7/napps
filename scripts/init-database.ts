@@ -1,9 +1,13 @@
-import { Pool } from 'pg'
-import { MigrationManager } from '../lib/migration-manager'
-import path from 'path'
-import dotenv from 'dotenv'
+import { Pool } from 'pg';
+import { MigrationManager } from '../lib/migration-manager.js';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import dotenv from 'dotenv';
 
-dotenv.config()
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 async function initializeDatabase() {
   const pool = new Pool({
@@ -11,25 +15,23 @@ async function initializeDatabase() {
     ssl: process.env.DATABASE_SSL === 'true' ? {
       rejectUnauthorized: false
     } : false
-  })
+  });
 
   try {
-    console.log('Starting database initialization...')
-
-    const migrationsDir = path.join(process.cwd(), 'migrations')
-    const migrationManager = new MigrationManager(pool, migrationsDir)
-
+    console.log('Starting database initialization...');
+    const migrationsDir = join(dirname(__dirname), 'migrations');
+    const migrationManager = new MigrationManager(pool, migrationsDir);
+    
     // Run migrations
-    await migrationManager.migrate()
-
-    console.log('Database initialization completed successfully')
+    await migrationManager.migrate();
+    console.log('Database initialization completed successfully');
   } catch (error) {
-    console.error('Database initialization failed:', error)
-    process.exit(1)
+    console.error('Database initialization failed:', error);
+    process.exit(1);
   } finally {
-    await pool.end()
+    await pool.end();
   }
 }
 
-initializeDatabase()
+initializeDatabase();
 

@@ -198,7 +198,7 @@ export default function HomePage() {
             </div>
             <div>
               <h3 className="text-xl font-bold mb-4">Contact Us</h3>
-              <p className="text-napps-gold">Email: nappsnasstate25</p>
+              <p className="text-napps-gold">Email: nappsnasstate25@gmail.com</p>
               <p className="text-napps-gold">Phone: 08030822969</p>
             </div>
           </div>
