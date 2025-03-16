@@ -13,7 +13,7 @@ export async function initializePayment(amount: number) {
 
   try {
     const profile = await query(
-      'SELECT payment_status FROM profiles WHERE id = $1',
+      'SELECT payment_status, payment_reference FROM profiles WHERE id = $1',
       [session.user.id]
     )
 
@@ -21,7 +21,9 @@ export async function initializePayment(amount: number) {
       throw new Error('Payment already completed')
     }
 
-    const paymentReference = `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`
+    // Generate new reference if none exists
+    const paymentReference = profile.rows[0]?.payment_reference || 
+      `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`
     
     await query(
       `UPDATE profiles 
@@ -54,23 +56,26 @@ export async function uploadPaymentProof(formData: FormData) {
     const file = formData.get('file') as File;
     const reference = formData.get('reference') as string;
 
-    if (!file || !reference) {
-      console.error('Upload failed: Missing file or reference');
-      throw new Error('Missing required fields');
+    if (!file) {
+      console.error('Upload failed: Missing file');
+      throw new Error('Please select a file to upload');
     }
 
-    // Validate payment reference exists and belongs to user
-    const payment = await query(
-      'SELECT payment_status FROM profiles WHERE id = $1 AND payment_reference = $2',
-      [session.user.id, reference]
+    // Check if user has a payment reference
+    const profile = await query(
+      'SELECT payment_reference, payment_status FROM profiles WHERE id = $1',
+      [session.user.id]
     );
 
-    if (payment.rowCount === 0) {
-      console.error('Upload failed: Invalid payment reference');
-      throw new Error('Invalid payment reference');
+    if (profile.rowCount === 0) {
+      throw new Error('Profile not found');
     }
 
-    if (payment.rows[0].payment_status === 'completed') {
+    // If no reference exists, generate one
+    const paymentReference = profile.rows[0].payment_reference || reference || 
+      `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+    if (profile.rows[0].payment_status === 'completed') {
       console.error('Upload failed: Payment already completed');
       throw new Error('Payment already completed');
     }
@@ -93,15 +98,15 @@ export async function uploadPaymentProof(formData: FormData) {
     const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
     console.log('File uploaded successfully to:', fileUrl);
 
-    // Update database within a transaction
     await withTransaction(async (client) => {
       await client.query(
         `UPDATE profiles 
          SET payment_proof = $1,
              payment_status = 'proof_submitted',
+             payment_reference = $2,
              updated_at = NOW()
-         WHERE id = $2 AND payment_reference = $3`,
-        [fileUrl, session.user.id, reference]
+         WHERE id = $3`,
+        [fileUrl, paymentReference, session.user.id]
       );
     });
 

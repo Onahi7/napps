@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Separator } from "@/components/ui/separator"
 import { Loader2, Upload, Copy, AlertCircle, CheckCircle2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { initializePayment, uploadPaymentProof } from "@/actions/payment-actions"
@@ -20,51 +21,32 @@ interface PaymentProps {
 }
 
 export function ParticipantPayment({ amount, reference, status, proofUrl }: PaymentProps) {
-  const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [bankDetails, setBankDetails] = useState<any>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
   const [isUploadDisabled, setIsUploadDisabled] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Fetch bank details when bank transfer tab is selected
-  const handleBankTransferSelect = useCallback(async () => {
-    if (bankDetails) return // Don't fetch if we already have the details
-
-    try {
-      const response = await fetch('/api/bank-details')
-      const data = await response.json()
-      setBankDetails(data)
-    } catch (error) {
-      console.error('Error fetching bank details:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load bank account details",
-        variant: "destructive",
-      })
-    }
-  }, [bankDetails, toast])
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const handleCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text)
     toast({
-      title: "Copied!",
-      description: "Text copied to clipboard",
+      description: "Payment reference copied to clipboard",
     })
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (uploading) return // Prevent file selection while uploading
-    
     const file = event.target.files?.[0]
-    if (!file) return
+    if (!file) {
+      setSelectedFile(null)
+      return
+    }
 
     // Validate file type
     if (!['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(file.type)) {
       toast({
         title: "Invalid file type",
-        description: "Please upload a JPEG, PNG image or PDF file",
+        description: "Please upload an image (JPG/PNG) or PDF",
         variant: "destructive",
       })
       event.target.value = '' // Clear the input
@@ -72,7 +54,6 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
       return
     }
 
-    // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "File too large",
@@ -93,11 +74,11 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
       const result = await initializePayment(amount)
       // Refresh the page to show new payment reference
       window.location.reload()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Payment initialization error:', error)
       toast({
         title: "Error",
-        description: "Failed to initialize payment",
+        description: error.message || "Failed to initialize payment",
         variant: "destructive",
       })
     } finally {
@@ -106,7 +87,7 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
   }
 
   const handleProofUpload = async () => {
-    if (!selectedFile || !reference || uploading) return;
+    if (!selectedFile || uploading) return;
 
     setUploading(true);
     setIsUploadDisabled(true);
@@ -114,7 +95,9 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
-      formData.append('reference', reference);
+      if (reference) {
+        formData.append('reference', reference);
+      }
 
       const result = await uploadPaymentProof(formData);
       
@@ -133,6 +116,9 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+
+      // Refresh the page after successful upload
+      window.location.reload();
 
     } catch (error: any) {
       console.error('Error uploading proof:', error);
@@ -213,85 +199,24 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
             Initialize Payment
           </Button>
         ) : (
-          <Tabs defaultValue="bank" className="space-y-4" onValueChange={(value) => {
-            if (value === 'bank') handleBankTransferSelect()
-          }}>
+          <Tabs defaultValue="bank" className="space-y-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="bank">Bank Transfer</TabsTrigger>
               <TabsTrigger value="upload">Upload Proof</TabsTrigger>
             </TabsList>
 
             <TabsContent value="bank" className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <Label>Bank Name</Label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      value={bankDetails?.bankName || ''} 
-                      readOnly 
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleCopy(bankDetails?.bankName || '')}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
+              <div className="rounded-md border p-4">
+                <div className="space-y-2">
+                  <h3 className="font-medium">Bank Details</h3>
+                  <div className="text-sm">
+                    <p><span className="font-medium">Bank:</span> Sterling Bank</p>
+                    <p><span className="font-medium">Account Name:</span> NAPPS North Central</p>
+                    <p><span className="font-medium">Account Number:</span> 0026286382</p>
                   </div>
                 </div>
-
-                <div>
-                  <Label>Account Number</Label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      value={bankDetails?.accountNumber || ''} 
-                      readOnly 
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleCopy(bankDetails?.accountNumber || '')}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Account Name</Label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      value={bankDetails?.accountName || ''} 
-                      readOnly 
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleCopy(bankDetails?.accountName || '')}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Amount</Label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      value={`₦${amount.toLocaleString()}`} 
-                      readOnly 
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleCopy(amount.toString())}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
+                <Separator className="my-4" />
+                <div className="space-y-2">
                   <Label>Payment Reference</Label>
                   <div className="flex items-center gap-2">
                     <Input 

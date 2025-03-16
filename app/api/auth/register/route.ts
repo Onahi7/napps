@@ -7,6 +7,13 @@ import { PoolClient } from 'pg'
 import { pool, query, withTransaction } from '@/lib/db'
 import { generateParticipantReference } from '@/lib/utils/reference-generator'
 
+// Add interface for database errors
+interface DatabaseError extends Error {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+}
+
 // Registration schema matching database structure
 const registrationSchema = z.object({
   email: z.string()
@@ -40,7 +47,8 @@ export async function POST(req: NextRequest) {
       console.error('Database connection test failed:', err);
       return NextResponse.json({
         success: false,
-        error: 'Unable to connect to the registration system. Please try again in a few minutes.'
+        error: 'Unable to connect to the registration system. Please try again in a few minutes.',
+        details: process.env.NODE_ENV === 'development' ? err : undefined
       }, { status: 503 });
     }
 
@@ -71,6 +79,9 @@ export async function POST(req: NextRequest) {
 
     // Check for existing user before transaction
     try {
+      // First check the database is still responding
+      await query('SELECT 1');
+      
       console.log('Checking if email already exists:', data.email);
       const existingUser = await query(
         'SELECT id FROM users WHERE email = $1',
@@ -99,9 +110,17 @@ export async function POST(req: NextRequest) {
           error: 'This phone number is already registered. Please use a different number.'
         }, { status: 409 });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Error checking for existing user:', err);
-      throw err; // Let the outer catch handle this
+      // Check if it's a connection error
+      const dbError = err as DatabaseError;
+      if (dbError.message?.includes('connection') || dbError.message?.includes('timeout')) {
+        return NextResponse.json({
+          success: false,
+          error: 'Database connection issue. Please try again in a few moments.'
+        }, { status: 503 });
+      }
+      throw err; // Let the outer catch handle other types of errors
     }
 
     console.log('Starting user creation transaction');
@@ -143,7 +162,7 @@ export async function POST(req: NextRequest) {
             'participant',
             'pending',
             'pending',
-            data.school_state, // Put in both old and new columns
+            data.school_state,
             data.napps_chapter,
             data.school_name,
             data.school_name,
@@ -156,8 +175,14 @@ export async function POST(req: NextRequest) {
         console.log('Profile created successfully');
 
         return userId;
-      } catch (err) {
-        console.error('Error in transaction:', err);
+      } catch (err: unknown) {
+        const dbError = err as DatabaseError;
+        console.error('Error in transaction:', {
+          message: dbError.message,
+          code: dbError.code,
+          constraint: dbError.constraint,
+          detail: dbError.detail
+        });
         throw err;
       }
     }, 3); // Try up to 3 times
@@ -169,30 +194,30 @@ export async function POST(req: NextRequest) {
       data: { id: userId }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const dbError = error as DatabaseError;
     console.error('Registration error details:', { 
-      message: error.message, 
-      code: error.code, 
-      constraint: error?.constraint,
-      detail: error?.detail,
-      stack: error.stack 
+      message: dbError.message, 
+      code: dbError.code, 
+      constraint: dbError?.constraint,
+      detail: dbError?.detail,
+      stack: process.env.NODE_ENV === 'development' ? dbError.stack : undefined
     });
 
     // Handle specific database errors
-    if (error.code === '23505') { // Unique violation
-      if (error.constraint?.includes('email') || error.detail?.includes('email')) {
+    if (dbError.code === '23505') { // Unique violation
+      if (dbError.constraint?.includes('email') || dbError.detail?.includes('email')) {
         return NextResponse.json({
           success: false,
           error: 'This email is already registered. Please login instead.'
         }, { status: 409 });
       }
-      if (error.constraint?.includes('phone') || error.detail?.includes('phone')) {
+      if (dbError.constraint?.includes('phone') || dbError.detail?.includes('phone')) {
         return NextResponse.json({
           success: false,
           error: 'This phone number is already registered. Please use a different number.'
         }, { status: 409 });
       }
-      // Generic constraint violation
       return NextResponse.json({
         success: false,
         error: 'A record with this information already exists.'
@@ -200,21 +225,31 @@ export async function POST(req: NextRequest) {
     }
 
     // Handle connection errors
-    if (error.message?.includes('connect') || error.message?.includes('timeout')) {
+    if (dbError.message?.includes('connect') || dbError.message?.includes('timeout')) {
       return NextResponse.json({
         success: false,
         error: 'Unable to complete registration due to connection issues. Please try again.'
       }, { status: 503 });
     }
 
+    // Handle constraint violations
+    if (dbError.code === '23503') { // Foreign key violation
+      console.error('Foreign key violation:', dbError);
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid data relationship. Please try again or contact support.'
+      }, { status: 400 });
+    }
+
     // Generic error response with more details in development
     const errorMessage = process.env.NODE_ENV === 'development' 
-      ? `Registration failed: ${error.message}` 
+      ? `Registration failed: ${dbError.message}` 
       : 'Registration failed. Please try again or contact support if the problem persists.';
     
     return NextResponse.json({
       success: false,
-      error: errorMessage
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? dbError : undefined
     }, { status: 500 });
   }
 }

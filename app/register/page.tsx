@@ -161,7 +161,7 @@ export default function RegisterPage() {
         return;
       }
       
-      // Successfully registered - redirect to registration success
+      // Registration successful - redirect to registration success page
       router.push('/registration-success')
       
     } catch (error: any) {
