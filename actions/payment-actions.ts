@@ -90,7 +90,7 @@ export async function uploadPaymentProof(formData: FormData) {
     }
 
     const result = await query(
-      'SELECT p.payment_status, u.phone FROM profiles p JOIN users u ON p.id = u.id WHERE p.id = $1',
+      'SELECT payment_status FROM profiles WHERE id = $1',
       [session.user.id]
     ).catch(error => {
       console.error('[PaymentActions] Database query error:', error);
