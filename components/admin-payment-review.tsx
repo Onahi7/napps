@@ -1,21 +1,26 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
+import { useToast } from "@/hooks/use-toast"
+import { Eye, Check, X, Loader2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Search, CheckCircle, XCircle, Eye } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Payment {
   id: string
@@ -30,9 +35,9 @@ interface Payment {
 export function AdminPaymentReview() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
   const [viewerOpen, setViewerOpen] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
+  const [processing, setProcessing] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -42,6 +47,9 @@ export function AdminPaymentReview() {
   async function fetchPayments() {
     try {
       const response = await fetch('/api/admin/payments')
+      if (!response.ok) {
+        throw new Error('Failed to fetch payments')
+      }
       const data = await response.json()
       setPayments(data)
     } catch (error) {
@@ -57,6 +65,9 @@ export function AdminPaymentReview() {
   }
 
   async function handleApprove(phone: string) {
+    if (processing) return
+    setProcessing(true)
+    
     try {
       const response = await fetch('/api/admin/payments/verify', {
         method: 'POST',
@@ -64,7 +75,9 @@ export function AdminPaymentReview() {
         body: JSON.stringify({ phone }),
       })
 
-      if (!response.ok) throw new Error('Failed to verify payment')
+      if (!response.ok) {
+        throw new Error('Failed to verify payment')
+      }
 
       toast({
         title: "Success",
@@ -73,6 +86,7 @@ export function AdminPaymentReview() {
 
       // Update the local state
       setPayments(payments.filter(p => p.phone !== phone))
+      setViewerOpen(false)
     } catch (error) {
       console.error('Error approving payment:', error)
       toast({
@@ -80,10 +94,15 @@ export function AdminPaymentReview() {
         description: "Failed to approve payment",
         variant: "destructive",
       })
+    } finally {
+      setProcessing(false)
     }
   }
 
   async function handleReject(phone: string) {
+    if (processing) return
+    setProcessing(true)
+
     try {
       const response = await fetch('/api/admin/payments/reject', {
         method: 'POST',
@@ -91,7 +110,9 @@ export function AdminPaymentReview() {
         body: JSON.stringify({ phone }),
       })
 
-      if (!response.ok) throw new Error('Failed to reject payment')
+      if (!response.ok) {
+        throw new Error('Failed to reject payment')
+      }
 
       toast({
         title: "Success",
@@ -100,6 +121,7 @@ export function AdminPaymentReview() {
 
       // Update the local state
       setPayments(payments.filter(p => p.phone !== phone))
+      setViewerOpen(false)
     } catch (error) {
       console.error('Error rejecting payment:', error)
       toast({
@@ -107,107 +129,128 @@ export function AdminPaymentReview() {
         description: "Failed to reject payment",
         variant: "destructive",
       })
+    } finally {
+      setProcessing(false)
     }
   }
 
-  const filteredPayments = payments.filter(payment => 
-    payment.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.email.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
   if (loading) {
-    return <p>Loading...</p>
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Payment Reviews</h2>
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search payments..."
-            className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {filteredPayments.map((payment) => (
-          <Card key={payment.phone}>
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i}>
             <CardContent className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold">{payment.full_name}</h3>
-                  <p className="text-sm text-muted-foreground">{payment.email}</p>
-                  <p className="text-sm text-muted-foreground">Phone: {payment.phone}</p>
-                  <p className="text-sm font-medium">Amount: ₦{payment.payment_amount.toLocaleString()}</p>
-                </div>
-
-                {payment.payment_proof && (
-                  <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
-                    <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        className="w-full"
-                        onClick={() => setSelectedPayment(payment)}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Payment Proof
-                      </Button>
-                    </DialogTrigger>
-                    {selectedPayment && (
-                      <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                          <DialogTitle>Payment Proof</DialogTitle>
-                          <DialogDescription>
-                            From {selectedPayment.full_name} ({selectedPayment.phone})
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="aspect-[3/2] relative overflow-hidden rounded-md border">
-                          <Image
-                            src={selectedPayment.payment_proof}
-                            alt="Payment proof"
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      </DialogContent>
-                    )}
-                  </Dialog>
-                )}
-
-                <div className="flex gap-2">
-                  <Button 
-                    className="flex-1"
-                    onClick={() => handleApprove(payment.phone)}
-                  >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Approve
-                  </Button>
-                  <Button 
-                    variant="destructive" 
-                    className="flex-1"
-                    onClick={() => handleReject(payment.phone)}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Reject
-                  </Button>
-                </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-[250px]" />
+                <Skeleton className="h-4 w-[200px]" />
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+    )
+  }
 
-      {filteredPayments.length === 0 && (
-        <div className="text-center text-muted-foreground">
-          No pending payment reviews
-        </div>
-      )}
+  if (payments.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>No Pending Payments</CardTitle>
+          <CardDescription>
+            There are no payment proofs waiting for review
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {payments.map((payment) => (
+        <Card key={payment.id}>
+          <CardContent className="p-6">
+            <div className="grid gap-4">
+              <div className="space-y-1">
+                <h3 className="font-semibold">{payment.full_name}</h3>
+                <p className="text-sm text-muted-foreground">{payment.email}</p>
+                <p className="text-sm font-medium">Phone: {payment.phone}</p>
+                <p className="text-sm font-medium">Amount: ₦{payment.payment_amount.toLocaleString()}</p>
+              </div>
+
+              {payment.payment_proof && (
+                <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => setSelectedPayment(payment)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Payment Proof
+                    </Button>
+                  </DialogTrigger>
+                  {selectedPayment && (
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Payment Proof</DialogTitle>
+                        <DialogDescription>
+                          From {selectedPayment.full_name} ({selectedPayment.phone})
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="aspect-[3/2] relative overflow-hidden rounded-md">
+                        {selectedPayment.payment_proof.toLowerCase().endsWith('.pdf') ? (
+                          <iframe
+                            src={selectedPayment.payment_proof}
+                            className="w-full h-full border-0"
+                            title="Payment proof PDF"
+                          />
+                        ) : (
+                          <Image
+                            src={selectedPayment.payment_proof}
+                            alt="Payment proof"
+                            fill
+                            className="object-contain bg-secondary"
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.src = '/images/error-image.png'; // Add a fallback error image
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex justify-end gap-2 mt-4">
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleReject(selectedPayment.phone)}
+                          disabled={processing}
+                        >
+                          {processing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <X className="h-4 w-4 mr-2" />
+                          )}
+                          Reject
+                        </Button>
+                        <Button
+                          variant="default"
+                          onClick={() => handleApprove(selectedPayment.phone)}
+                          disabled={processing}
+                        >
+                          {processing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4 mr-2" />
+                          )}
+                          Approve
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  )}
+                </Dialog>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   )
 }

@@ -5,72 +5,14 @@ import { StorageService, StorageError } from '@/lib/storage';
 import { withTransaction, query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
-interface ErrorResponse {
-  error: string;
-  code: string;
-  source: string;
-  details?: any;
-}
-
-function createErrorResponse(error: any): { response: ErrorResponse; status: number } {
-  console.error('[UploadProofAPI] Error details:', {
-    name: error.name,
-    message: error.message,
-    code: error.code,
-    source: error.source,
-    metadata: error.$metadata,
-    stack: error.stack
-  });
-
-  let status = 500;
-  const response: ErrorResponse = {
-    error: 'An unexpected error occurred',
-    code: 'UNKNOWN_ERROR',
-    source: 'upload-proof-api'
-  };
-
-  if (error instanceof StorageError) {
-    response.error = error.message;
-    response.code = error.code;
-    response.source = error.source;
-    
-    switch (error.code) {
-      case 'CREDENTIALS_MISSING':
-      case 'ACCESS_DENIED':
-        status = 403;
-        break;
-      case 'BUCKET_NOT_FOUND':
-        status = 404;
-        break;
-      case 'FILE_TOO_LARGE':
-        status = 413;
-        break;
-      case 'UPLOAD_ERROR':
-        status = 500;
-        break;
-    }
-  } else if (error.message === 'Unauthorized') {
-    status = 401;
-    response.error = 'Authentication required';
-    response.code = 'AUTH_ERROR';
-  } else if (error.constraint) {
-    status = 400;
-    response.error = 'Database constraint violation';
-    response.code = 'DB_CONSTRAINT_ERROR';
-    response.details = { constraint: error.constraint };
-  }
-
-  return { response, status };
-}
-
 export async function POST(request: NextRequest) {
-  console.log('[UploadProofAPI] Starting payment proof upload request');
+  console.log('[UploadAPI] Received new payment proof upload request');
   
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json(
-        { error: 'Authentication required', code: 'AUTH_ERROR', source: 'session-check' },
+        { error: 'Authentication required' },
         { status: 401 }
       );
     }
@@ -80,7 +22,7 @@ export async function POST(request: NextRequest) {
     
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json(
-        { error: 'No file uploaded', code: 'VALIDATION_ERROR', source: 'file-check' },
+        { error: 'No file uploaded' },
         { status: 400 }
       );
     }
@@ -89,11 +31,7 @@ export async function POST(request: NextRequest) {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        {
-          error: 'Invalid file type. Please upload an image (JPG/PNG) or PDF',
-          code: 'VALIDATION_ERROR',
-          source: 'file-type-check'
-        },
+        { error: 'Invalid file type. Please upload an image (JPG/PNG) or PDF' },
         { status: 400 }
       );
     }
@@ -101,62 +39,72 @@ export async function POST(request: NextRequest) {
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
-        {
-          error: 'File too large. Maximum size is 5MB',
-          code: 'VALIDATION_ERROR',
-          source: 'file-size-check'
-        },
+        { error: 'File too large. Maximum size is 5MB' },
         { status: 400 }
       );
     }
 
-    // Check payment status
-    console.log('[UploadProofAPI] Checking payment status');
-    const result = await query(
-      'SELECT p.payment_status FROM profiles p WHERE p.id = $1',
+    // Verify profile exists and payment is not already completed
+    const profile = await query(
+      'SELECT payment_status FROM profiles WHERE id = $1',
       [session.user.id]
     );
 
-    if (result.rowCount === 0) {
+    if (!profile.rows[0]) {
       return NextResponse.json(
-        { error: 'Profile not found', code: 'NOT_FOUND_ERROR', source: 'profile-check' },
+        { error: 'Profile not found' },
         { status: 404 }
       );
     }
 
-    if (result.rows[0].payment_status === 'completed') {
+    if (profile.rows[0].payment_status === 'completed') {
       return NextResponse.json(
-        { error: 'Payment already completed', code: 'VALIDATION_ERROR', source: 'payment-status-check' },
+        { error: 'Payment has already been completed' },
         { status: 400 }
       );
     }
 
-    // Process file upload
+    // Upload file
+    console.log('[UploadAPI] Converting file to buffer...');
     const buffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `payment-proofs/${session.user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-
-    console.log('[UploadProofAPI] Uploading file to storage');
+    
+    console.log('[UploadAPI] Uploading file to storage...');
     const storage = StorageService.getInstance();
-    const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
+    let fileUrl: string;
+    
+    try {
+      fileUrl = await storage.uploadFile(buffer, file.name, file.type);
+    } catch (error) {
+      if (error instanceof StorageError) {
+        console.error('[UploadAPI] Storage error:', error.originalError);
+        return NextResponse.json(
+          { error: error.message },
+          { status: 500 }
+        );
+      }
+      throw error;
+    }
 
     // Update database
-    console.log('[UploadProofAPI] Updating profile with payment proof');
+    console.log('[UploadAPI] Updating database with new proof...');
     await withTransaction(async (client) => {
-      // Delete old payment proof if exists
-      const oldProof = await client.query(
+      // Get current payment proof if any
+      const result = await client.query(
         'SELECT payment_proof FROM profiles WHERE id = $1',
         [session.user.id]
       );
-      
-      if (oldProof.rows[0]?.payment_proof) {
+
+      // Delete old file if exists
+      if (result.rows[0]?.payment_proof) {
         try {
-          await storage.deleteFile(oldProof.rows[0].payment_proof);
+          await storage.deleteFile(result.rows[0].payment_proof);
         } catch (error) {
-          console.error('[UploadProofAPI] Failed to delete old payment proof:', error);
-          // Continue with the update as this is not a critical error
+          console.warn('[UploadAPI] Failed to delete old proof:', error);
+          // Continue with update as this is not critical
         }
       }
 
+      // Update profile with new proof
       await client.query(
         `UPDATE profiles 
          SET payment_proof = $1,
@@ -167,14 +115,22 @@ export async function POST(request: NextRequest) {
       );
     });
 
+    // Revalidate relevant pages
+    console.log('[UploadAPI] Revalidating pages...');
     revalidatePath('/payment');
     revalidatePath('/participant/dashboard');
     revalidatePath('/admin/payments');
 
-    console.log('[UploadProofAPI] Payment proof upload completed successfully');
-    return NextResponse.json({ success: true, url: fileUrl });
+    console.log('[UploadAPI] Upload completed successfully');
+    return NextResponse.json({
+      success: true,
+      url: fileUrl
+    });
   } catch (error: any) {
-    const { response, status } = createErrorResponse(error);
-    return NextResponse.json(response, { status });
+    console.error('[UploadAPI] Unexpected error:', error);
+    return NextResponse.json(
+      { error: 'An unexpected error occurred while uploading your payment proof. Please try again.' },
+      { status: 500 }
+    );
   }
 }

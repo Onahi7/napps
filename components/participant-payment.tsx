@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { Upload, Copy, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { uploadPaymentProof } from "@/actions/payment-actions"
 import Image from "next/image"
+import { fileUtils } from "@/lib/utils"
 
 interface PaymentProps {
   amount: number
@@ -20,18 +20,10 @@ interface PaymentProps {
   proofUrl?: string
 }
 
-interface UploadError {
-  error: string
-  code: string
-  source: string
-  details?: any
-}
-
 export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: PaymentProps) {
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [error, setError] = useState<UploadError | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -50,7 +42,6 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null)
     const file = event.target.files?.[0]
     if (!file) {
       setSelectedFile(null)
@@ -59,11 +50,6 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
     // Validate file type
     if (!['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(file.type)) {
-      setError({
-        error: 'Invalid file type. Please upload an image (JPG/PNG) or PDF',
-        code: 'VALIDATION_ERROR',
-        source: 'file-type-check'
-      })
       event.target.value = ''
       setSelectedFile(null)
       toast({
@@ -76,11 +62,6 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError({
-        error: 'File size too large. Maximum size is 5MB',
-        code: 'VALIDATION_ERROR',
-        source: 'file-size-check'
-      })
       event.target.value = ''
       setSelectedFile(null)
       toast({
@@ -94,33 +75,8 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
     setSelectedFile(file)
   }
 
-  const getErrorMessage = (error: UploadError): string => {
-    switch (error.code) {
-      case 'AUTH_ERROR':
-        return 'Your session has expired. Please refresh the page and try again.';
-      case 'STORAGE_ERROR':
-        switch (error.source) {
-          case 'credentials':
-            return 'Storage service is not properly configured. Please contact support.';
-          case 'bucket-missing':
-            return 'Storage location is not available. Please contact support.';
-          default:
-            return 'Failed to upload file. Please try again later.';
-        }
-      case 'VALIDATION_ERROR':
-        return error.error;
-      case 'DATABASE_ERROR':
-        return 'Failed to save your payment proof. Please try again later.';
-      case 'NETWORK_ERROR':
-        return 'Network connection error. Please check your internet connection and try again.';
-      default:
-        return 'An unexpected error occurred. Please try again later.';
-    }
-  }
-
   const handleProofUpload = async () => {
     if (!selectedFile || uploading) return
-    setError(null)
     setUploading(true)
 
     try {
@@ -135,14 +91,7 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
       const data = await response.json()
 
       if (!response.ok) {
-        const uploadError = data as UploadError
-        setError(uploadError)
-        toast({
-          title: "Upload failed",
-          description: getErrorMessage(uploadError),
-          variant: "destructive",
-        })
-        return
+        throw new Error(data.error || 'Failed to upload payment proof')
       }
 
       toast({
@@ -160,14 +109,9 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
       window.location.reload()
     } catch (error: any) {
       console.error('Error uploading proof:', error)
-      setError({
-        error: error.message || "Failed to upload payment proof",
-        code: "UNKNOWN_ERROR",
-        source: "client"
-      })
       toast({
         title: "Error",
-        description: "Failed to upload payment proof. Please try again later.",
+        description: error.message || "Failed to upload payment proof. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -209,12 +153,24 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
           {proofUrl && (
             <div className="aspect-[3/2] relative overflow-hidden rounded-md border">
-              <Image
-                src={proofUrl}
-                alt="Payment proof"
-                fill
-                className="object-cover"
-              />
+              {fileUtils.isPdf(proofUrl) ? (
+                <iframe
+                  src={proofUrl}
+                  className="w-full h-full border-0"
+                  title="Payment proof PDF"
+                />
+              ) : (
+                <Image
+                  src={proofUrl}
+                  alt="Payment proof"
+                  fill
+                  className="object-contain bg-secondary"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.src = '/images/error-image.png'; // Add a fallback error image
+                  }}
+                />
+              )}
             </div>
           )}
         </CardContent>
@@ -278,13 +234,6 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
           <TabsContent value="upload" className="space-y-4">
             <div className="grid w-full items-center gap-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{getErrorMessage(error)}</AlertDescription>
-                </Alert>
-              )}
-              
               <div className="space-y-2">
                 <Label htmlFor="proof">Upload Payment Proof</Label>
                 <Input
@@ -309,12 +258,12 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
                 {(uploading || isPending) ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
+                    <span>Uploading...</span>
                   </>
                 ) : (
                   <>
                     <Upload className="mr-2 h-4 w-4" />
-                    Upload Proof
+                    <span>Upload Proof</span>
                   </>
                 )}
               </Button>

@@ -1,13 +1,9 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { env } from './env';
+import { fileUtils } from './utils';
 
 export class StorageError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public source: string,
-    public originalError?: any
-  ) {
+  constructor(message: string, public originalError?: any) {
     super(message);
     this.name = 'StorageError';
   }
@@ -18,251 +14,89 @@ export class StorageService {
   private client: S3Client;
   private bucketName: string;
   private region: string;
-  private endpoint: string;
-  private cdnEndpoint: string;
-  private maxRetries: number = 3;
 
   private constructor() {
     try {
-      console.log('[StorageService] Initializing...');
-      
-      if (!env.DO_SPACES_KEY || !env.DO_SPACES_SECRET) {
-        throw new StorageError(
-          'DigitalOcean Spaces credentials are missing',
-          'CREDENTIALS_MISSING',
-          'initialization'
-        );
-      }
-
       this.bucketName = env.DO_SPACES_BUCKET;
       this.region = env.DO_SPACES_REGION;
-      
-      // Set up endpoints using virtual-hosted style URLs
-      const baseEndpoint = `${this.region}.digitaloceanspaces.com`;
-      this.endpoint = `https://${this.bucketName}.${baseEndpoint}`;
-      this.cdnEndpoint = `https://${this.bucketName}.${this.region}.cdn.digitaloceanspaces.com`;
-      
-      console.log(`[StorageService] Configuration:
-        region=${this.region}
-        bucket=${this.bucketName}
-        endpoint=${this.endpoint}
-      `);
 
+      if (!env.DO_SPACES_KEY || !env.DO_SPACES_SECRET) {
+        throw new StorageError('Storage credentials are missing');
+      }
+
+      // Initialize S3 client
       this.client = new S3Client({
-        endpoint: `https://${baseEndpoint}`,
+        endpoint: `https://${this.region}.digitaloceanspaces.com`,
         region: this.region,
         credentials: {
           accessKeyId: env.DO_SPACES_KEY,
           secretAccessKey: env.DO_SPACES_SECRET
         },
-        forcePathStyle: false // Required for virtual-hosted style URLs
+        forcePathStyle: false
       });
-      
-      // Verify bucket exists and is accessible
-      this.verifyBucket().catch(error => {
-        console.error('[StorageService] Bucket verification failed:', error);
-        throw error;
-      });
-      
-      console.log('[StorageService] Initialized successfully');
-    } catch (error: any) {
-      console.error('[StorageService] Initialization failed:', {
-        error: error.message,
-        code: error.code,
-        source: error.source
-      });
-      
-      if (error instanceof StorageError) {
-        throw error;
-      }
-      
-      throw new StorageError(
-        `Storage service initialization failed: ${error.message}`,
-        'INIT_ERROR',
-        'constructor',
-        error
-      );
-    }
-  }
 
-  private async verifyBucket(): Promise<void> {
-    console.log(`[StorageService] Verifying bucket: ${this.bucketName}`);
-    try {
-      await this.client.send(new HeadBucketCommand({
-        Bucket: this.bucketName
-        // Error codes are handled in the catch block below
-      }));
-      console.log('[StorageService] Bucket verification successful');
+      console.log('[Storage] Initialized with bucket:', this.bucketName);
     } catch (error: any) {
-      console.error('[StorageService] Bucket verification error:', {
-        error: error.message,
-        metadata: error.$metadata,
-        name: error.name
-      });
-      
-      if (error.$metadata?.httpStatusCode === 404) {
-        throw new StorageError(
-          `Bucket '${this.bucketName}' does not exist. Please create it in your DigitalOcean account.`,
-          'BUCKET_NOT_FOUND',
-          'bucket-verification',
-          error
-        );
-      } else if (error.$metadata?.httpStatusCode === 403) {
-        throw new StorageError(
-          'Access denied to bucket. Please verify your API keys have read/write permissions.',
-          'ACCESS_DENIED',
-          'bucket-verification',
-          error
-        );
-      }
-      
-      throw new StorageError(
-        'Failed to verify bucket access',
-        'BUCKET_VERIFICATION_ERROR',
-        'bucket-verification',
-        error
-      );
+      console.error('[Storage] Initialization error:', error);
+      throw new StorageError(error.message, error);
     }
   }
 
   public static getInstance(): StorageService {
     if (!StorageService.instance) {
-      try {
-        StorageService.instance = new StorageService();
-      } catch (error: any) {
-        console.error('[StorageService] Instance creation error:', error);
-        throw error;
-      }
+      StorageService.instance = new StorageService();
     }
     return StorageService.instance;
   }
 
-  private async uploadWithRetry(command: PutObjectCommand, attempt: number = 1): Promise<void> {
+  async uploadFile(file: Buffer, originalName: string, mimeType: string): Promise<string> {
     try {
-      await this.client.send(command);
-    } catch (error: any) {
-      console.error(`[StorageService] Upload attempt ${attempt} failed:`, error);
-      
-      if (attempt < this.maxRetries && this.isRetryableError(error)) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        console.log(`[StorageService] Retrying upload in ${delay}ms (attempt ${attempt + 1}/${this.maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.uploadWithRetry(command, attempt + 1);
-      }
-      throw error;
-    }
-  }
+      const fileName = fileUtils.generateFileName(originalName);
 
-  private isRetryableError(error: any): boolean {
-    const isRetryable = (
-      error.name === 'NetworkingError' ||
-      error.$metadata?.httpStatusCode === 429 ||
-      error.$metadata?.httpStatusCode >= 500
-    );
-    
-    console.log(`[StorageService] Error ${error.name} ${error.$metadata?.httpStatusCode} retryable: ${isRetryable}`);
-    return isRetryable;
-  }
-
-  async uploadFile(file: Buffer, fileName: string, mimeType: string): Promise<string> {
-    console.log(`[StorageService] Uploading file: ${fileName}, type=${mimeType}, size=${file.length} bytes`);
-    
-    try {
-      const command = new PutObjectCommand({
+      await this.client.send(new PutObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
         Body: file,
         ACL: 'public-read',
         ContentType: mimeType,
-        CacheControl: 'max-age=31536000',
+        CacheControl: 'max-age=31536000', // 1 year cache
         Metadata: {
-          'uploaded-by': 'napps-summit',
-          'original-mime-type': mimeType,
-          'upload-timestamp': new Date().toISOString()
+          'original-name': originalName,
+          'upload-time': new Date().toISOString()
         }
-      });
+      }));
 
-      await this.uploadWithRetry(command);
+      // Use CDN URL for better performance
+      const fileUrl = fileUtils.getCdnUrl(fileName, { 
+        DO_SPACES_BUCKET: this.bucketName, 
+        DO_SPACES_REGION: this.region 
+      });
       
-      // Use CDN URL if available, fallback to direct URL
-      const fileUrl = `${this.cdnEndpoint}/${fileName}`;
-      console.log(`[StorageService] File uploaded successfully: ${fileUrl}`);
+      console.log('[Storage] File uploaded successfully:', fileUrl);
       return fileUrl;
     } catch (error: any) {
-      console.error('[StorageService] File upload error:', {
-        error: error.message,
-        metadata: error.$metadata,
-        fileName,
-        mimeType
-      });
-      
+      console.error('[Storage] Upload error:', error);
       if (error.$metadata?.httpStatusCode === 403) {
-        throw new StorageError(
-          'Access denied. Please verify your API keys have write permissions.',
-          'UPLOAD_ACCESS_DENIED',
-          'file-upload',
-          error
-        );
-      } else if (error.name === 'NoSuchBucket') {
-        throw new StorageError(
-          `Bucket '${this.bucketName}' does not exist. Please create it in your DigitalOcean account.`,
-          'BUCKET_NOT_FOUND',
-          'file-upload',
-          error
-        );
-      } else if (error.$metadata?.httpStatusCode === 413) {
-        throw new StorageError(
-          'File size exceeds the maximum allowed size.',
-          'FILE_TOO_LARGE',
-          'file-upload',
-          error
-        );
-      } else if (error.name === 'NetworkingError') {
-        throw new StorageError(
-          'Network error occurred while uploading. Please check your connection and try again.',
-          'NETWORK_ERROR',
-          'file-upload',
-          error
-        );
+        throw new StorageError('Access denied. Please check storage permissions.', error);
       }
-      
-      throw new StorageError(
-        `Failed to upload file: ${error.message}`,
-        'UPLOAD_ERROR',
-        'file-upload',
-        error
-      );
+      throw new StorageError('Failed to upload file. Please try again.', error);
     }
   }
 
-  async deleteFile(fileName: string): Promise<void> {
-    console.log(`[StorageService] Deleting file: ${fileName}`);
+  async deleteFile(fileUrl: string): Promise<void> {
     try {
-      const command = new DeleteObjectCommand({
+      const fileName = fileUtils.getFileNameFromUrl(fileUrl);
+
+      await this.client.send(new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: fileName
-      });
+      }));
 
-      await this.client.send(command);
-      console.log(`[StorageService] File deleted successfully: ${fileName}`);
+      console.log('[Storage] File deleted successfully:', fileName);
     } catch (error: any) {
-      console.error('[StorageService] File deletion error:', {
-        error: error.message,
-        metadata: error.$metadata,
-        fileName
-      });
-      
-      if (error.$metadata?.httpStatusCode === 404) {
-        console.warn(`[StorageService] File ${fileName} does not exist, ignoring delete request`);
-        return;
-      }
-      
-      throw new StorageError(
-        `Failed to delete file: ${error.message}`,
-        'DELETE_ERROR',
-        'file-deletion',
-        error
-      );
+      console.error('[Storage] Delete error:', error);
+      // Don't throw on delete errors, just log them
+      console.warn('[Storage] Failed to delete file:', fileUrl);
     }
   }
 }
