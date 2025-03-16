@@ -5,19 +5,20 @@ import { DatabaseMonitor } from './db-monitor'
 // Disable native PG module to ensure compatibility
 process.env.NODE_PG_FORCE_NATIVE = 'false'
 
-// Create PostgreSQL connection pool with optimized settings for DigitalOcean
+// Create PostgreSQL connection pool with optimized settings for Digital Ocean
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   ssl: env.DATABASE_SSL ? {
-    rejectUnauthorized: false,  // Allow self-signed certs for DigitalOcean managed database
-    checkServerIdentity: () => undefined // Skip hostname checks
+    rejectUnauthorized: false,
+    checkServerIdentity: () => undefined
   } : false,
-  // Improved connection settings for DigitalOcean managed database
-  max: 15,                          // Maximum number of clients
-  idleTimeoutMillis: 60000,         // 1 minute idle timeout
-  connectionTimeoutMillis: 10000,   // 10 second connection timeout
-  statement_timeout: 60000,         // 1 minute statement timeout
-  query_timeout: 30000,             // 30 second query timeout
+  // Connection pool settings optimized for Digital Ocean managed database
+  max: 20,                          // Increased for Digital Ocean managed DB
+  min: 3,                           // Increased minimum connections
+  idleTimeoutMillis: 60000,         // Increased to 60 seconds
+  connectionTimeoutMillis: 15000,   // Increased to 15 seconds
+  statement_timeout: 60000,         // Increased to 60 seconds
+  query_timeout: 30000,             // Increased to 30 seconds
   application_name: 'napps_summit',
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000
@@ -26,8 +27,8 @@ export const pool = new Pool({
 // Initialize database monitoring
 const monitor = DatabaseMonitor.getInstance(pool)
 
-// Helper to get a client from the pool with error handling and retry capability
-export async function getClient(retries = 3, delay = 1000) {
+// Helper to get a client from the pool with error handling
+export async function getClient(retries = 5, delay = 2000) {
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -46,6 +47,7 @@ export async function getClient(retries = 3, delay = 1000) {
       const error = err as Error;
       console.error(`Database connection attempt ${attempt + 1}/${retries} failed:`, error.message);
       lastError = error;
+      monitor.recordError(error);
       
       // Only wait if we're going to retry
       if (attempt < retries - 1) {
@@ -58,7 +60,7 @@ export async function getClient(retries = 3, delay = 1000) {
 }
 
 // Helper for single queries with retry capability
-export async function query(text: string, params?: any[], retries = 2) {
+export async function query(text: string, params?: any[], retries = 3) {
   const start = Date.now();
   let lastError: Error | null = null;
   
@@ -67,6 +69,8 @@ export async function query(text: string, params?: any[], retries = 2) {
       const result = await pool.query(text, params);
       const duration = Date.now() - start;
 
+      // Record metrics
+      monitor.recordQuery(duration);
       if (duration > 1000) {
         console.warn('Slow query:', { text, duration, rows: result.rowCount });
       }
@@ -76,21 +80,29 @@ export async function query(text: string, params?: any[], retries = 2) {
       const error = err as Error;
       console.error(`Query attempt ${attempt + 1}/${retries} failed:`, { text, error: error.message });
       lastError = error;
+      monitor.recordError(error);
       
-      if (attempt < retries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Check if error is retryable
+      const retryableError = 
+        error.message.includes('connection') || 
+        error.message.includes('timeout') ||
+        error.message.includes('Connection terminated');
+        
+      if (!retryableError || attempt >= retries - 1) {
+        throw error;
       }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
-  console.error('Query failed after all retries:', { text });
   throw lastError || new Error('Query failed after all retries');
 }
 
-// Transaction helper with automatic rollback on error and retry capability
+// Transaction helper with automatic rollback
 export async function withTransaction<T>(
   callback: (client: any) => Promise<T>,
-  retries = 2
+  retries = 3
 ): Promise<T> {
   let lastError: Error | null = null;
   
@@ -107,8 +119,7 @@ export async function withTransaction<T>(
       try {
         await client.query('ROLLBACK');
       } catch (rollbackErr) {
-        const error = rollbackErr as Error;
-        console.error('Error during transaction rollback:', error);
+        console.error('Error during transaction rollback:', rollbackErr);
       }
       
       const errorMessage = String(lastError);
@@ -132,7 +143,7 @@ export async function withTransaction<T>(
 }
 
 // Health check function with timeout
-export async function checkDatabaseHealth(timeout = 5000) {
+export async function checkDatabaseHealth(timeout = 10000) {
   try {
     const healthCheckPromise = monitor.checkHealth();
     const timeoutPromise = new Promise<never>((_, reject) => {

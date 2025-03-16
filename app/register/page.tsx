@@ -122,7 +122,19 @@ export default function RegisterPage() {
       if (!response.ok) {
         switch (response.status) {
           case 409: // Conflict - duplicate entry
-            setErrors({ submit: data.error });
+            if (data.error.includes('email')) {
+              setErrors({ 
+                email: "This email is already registered. Please login instead.",
+                submit: "This email address is already registered in our system. If this is your email, please try logging in instead."
+              });
+            } else if (data.error.includes('phone')) {
+              setErrors({ 
+                phone: "This phone number is already registered. Please use a different number.",
+                submit: "This phone number is already registered in our system. If this is your phone number, please try logging in or use a different number."
+              });
+            } else {
+              setErrors({ submit: data.error });
+            }
             break;
           case 503: // Service Unavailable
             setErrors({ 
