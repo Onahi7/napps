@@ -7,10 +7,42 @@ import { revalidatePath } from 'next/cache'
 import { StorageService } from '@/lib/storage'
 
 class PaymentError extends Error {
-  constructor(message: string, public code: string, public source: string) {
+  constructor(message: string, public code: string, public source: string, public originalError?: any) {
     super(message);
     this.name = 'PaymentError';
   }
+}
+
+async function retryFetch(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Cache-Control': 'no-cache' // Prevent caching issues
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Request failed');
+      }
+      
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      if (i < retries - 1) {
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, i), 5000)));
+        continue;
+      }
+    }
+  }
+  
+  throw lastError || new Error('Failed after retries');
 }
 
 export async function initializePayment(amount: number) {
@@ -49,7 +81,7 @@ export async function initializePayment(amount: number) {
 export async function uploadPaymentProof(file: File) {
   try {
     // First get a presigned URL
-    const response = await fetch('/api/presigned-url', {
+    const response = await retryFetch('/api/presigned-url', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -59,15 +91,10 @@ export async function uploadPaymentProof(file: File) {
       }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new PaymentError(error.error || 'Failed to get upload URL', 'STORAGE_ERROR', 'presign');
-    }
-
     const { presignedUrl, fileUrl } = await response.json();
 
     // Upload directly to DigitalOcean Spaces
-    const uploadResponse = await fetch(presignedUrl, {
+    const uploadResponse = await retryFetch(presignedUrl, {
       method: 'PUT',
       body: file,
       headers: {
@@ -76,11 +103,16 @@ export async function uploadPaymentProof(file: File) {
     });
 
     if (!uploadResponse.ok) {
-      throw new PaymentError('Failed to upload file', 'STORAGE_ERROR', 'upload');
+      throw new PaymentError(
+        'Failed to upload file to storage',
+        'STORAGE_ERROR',
+        'upload',
+        uploadResponse
+      );
     }
 
     // Update profile with new proof URL
-    const updateResponse = await fetch('/api/payment-proof', {
+    const updateResponse = await retryFetch('/api/payment-proof', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -91,7 +123,11 @@ export async function uploadPaymentProof(file: File) {
     });
 
     if (!updateResponse.ok) {
-      throw new PaymentError('Failed to save payment proof', 'DATABASE_ERROR', 'profile-update');
+      throw new PaymentError(
+        'Failed to save payment proof',
+        'DATABASE_ERROR',
+        'profile-update'
+      );
     }
 
     revalidatePath('/payment');
@@ -101,13 +137,26 @@ export async function uploadPaymentProof(file: File) {
     return { success: true, fileUrl };
   } catch (error: any) {
     console.error('[PaymentActions] Payment proof upload error:', error);
+    
+    // Enhance error messages for common network issues
+    if (error.message?.includes('fetch')) {
+      throw new PaymentError(
+        'Network connection error. Please check your internet connection and try again.',
+        'NETWORK_ERROR',
+        'fetch',
+        error
+      );
+    }
+    
     if (error instanceof PaymentError) {
       throw error;
     }
+    
     throw new PaymentError(
       error.message || 'An unexpected error occurred',
       'UNKNOWN_ERROR',
-      'payment-action'
+      'payment-action',
+      error
     );
   }
 }

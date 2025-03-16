@@ -28,6 +28,7 @@ export default function PaymentPage() {
   const [uploadingProof, setUploadingProof] = useState(false);
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function initialize() {
@@ -130,6 +131,9 @@ export default function PaymentPage() {
       if (fileInput) fileInput.value = '';
       setPaymentProofFile(null);
       
+      // Show success message with loading indicator before redirect
+      setSuccessMessage("Upload successful! Redirecting to dashboard...");
+      
       // Redirect after a short delay
       setTimeout(() => {
         router.refresh();
@@ -138,10 +142,14 @@ export default function PaymentPage() {
 
     } catch (error: any) {
       console.error("Error uploading proof:", error);
-      setError(error.message || "Failed to upload payment proof");
+      const errorMessage = error.code === 'NETWORK_ERROR' 
+        ? error.message 
+        : error.message || "Failed to upload payment proof";
+      
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: error.message || "Failed to upload payment proof. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -184,7 +192,14 @@ export default function PaymentPage() {
           <CardContent className="space-y-6">
             {error && (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                {error}
+                <p className="font-medium">Error</p>
+                <p>{error}</p>
+              </div>
+            )}
+            {successMessage && (
+              <div className="rounded-md bg-green-50 p-3 text-sm text-green-600">
+                <p className="font-medium">Success</p>
+                <p>{successMessage}</p>
               </div>
             )}
             <div className="rounded-md bg-muted p-4">
