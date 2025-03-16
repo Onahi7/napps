@@ -37,22 +37,25 @@ export class StorageService {
       this.bucketName = env.DO_SPACES_BUCKET;
       this.region = env.DO_SPACES_REGION;
       
-      // Standard endpoint for direct access
-      this.endpoint = `https://${this.region}.digitaloceanspaces.com`;
-      
-      // CDN endpoint for public access
+      // Set up endpoints using virtual-hosted style URLs
+      const baseEndpoint = `${this.region}.digitaloceanspaces.com`;
+      this.endpoint = `https://${this.bucketName}.${baseEndpoint}`;
       this.cdnEndpoint = `https://${this.bucketName}.${this.region}.cdn.digitaloceanspaces.com`;
       
-      console.log(`[StorageService] Configuration: region=${this.region}, bucket=${this.bucketName}`);
+      console.log(`[StorageService] Configuration:
+        region=${this.region}
+        bucket=${this.bucketName}
+        endpoint=${this.endpoint}
+      `);
 
       this.client = new S3Client({
-        endpoint: this.endpoint,
+        endpoint: `https://${baseEndpoint}`,
         region: this.region,
         credentials: {
           accessKeyId: env.DO_SPACES_KEY,
           secretAccessKey: env.DO_SPACES_SECRET
         },
-        forcePathStyle: false
+        forcePathStyle: false // Required for virtual-hosted style URLs
       });
       
       // Verify bucket exists and is accessible
@@ -87,21 +90,26 @@ export class StorageService {
     try {
       await this.client.send(new HeadBucketCommand({
         Bucket: this.bucketName
+        // Error codes are handled in the catch block below
       }));
       console.log('[StorageService] Bucket verification successful');
     } catch (error: any) {
-      console.error('[StorageService] Bucket verification error:', error);
+      console.error('[StorageService] Bucket verification error:', {
+        error: error.message,
+        metadata: error.$metadata,
+        name: error.name
+      });
       
       if (error.$metadata?.httpStatusCode === 404) {
         throw new StorageError(
-          `Bucket '${this.bucketName}' does not exist`,
+          `Bucket '${this.bucketName}' does not exist. Please create it in your DigitalOcean account.`,
           'BUCKET_NOT_FOUND',
           'bucket-verification',
           error
         );
       } else if (error.$metadata?.httpStatusCode === 403) {
         throw new StorageError(
-          'Access denied to bucket. Check your credentials and permissions',
+          'Access denied to bucket. Please verify your API keys have read/write permissions.',
           'ACCESS_DENIED',
           'bucket-verification',
           error
@@ -176,6 +184,7 @@ export class StorageService {
 
       await this.uploadWithRetry(command);
       
+      // Use CDN URL if available, fallback to direct URL
       const fileUrl = `${this.cdnEndpoint}/${fileName}`;
       console.log(`[StorageService] File uploaded successfully: ${fileUrl}`);
       return fileUrl;
@@ -189,14 +198,14 @@ export class StorageService {
       
       if (error.$metadata?.httpStatusCode === 403) {
         throw new StorageError(
-          'Access denied to storage. Check your credentials and permissions.',
+          'Access denied. Please verify your API keys have write permissions.',
           'UPLOAD_ACCESS_DENIED',
           'file-upload',
           error
         );
       } else if (error.name === 'NoSuchBucket') {
         throw new StorageError(
-          `Bucket '${this.bucketName}' does not exist.`,
+          `Bucket '${this.bucketName}' does not exist. Please create it in your DigitalOcean account.`,
           'BUCKET_NOT_FOUND',
           'file-upload',
           error
