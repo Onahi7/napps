@@ -35,11 +35,24 @@ async function configureCors() {
     CORSConfiguration: {
       CORSRules: [
         {
-          AllowedHeaders: ["*"],
-          AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"],
-          AllowedOrigins: ["https://summit.nappsnasarawa.com"],
-          ExposeHeaders: ["ETag"],
-          MaxAgeSeconds: 0
+          AllowedHeaders: [
+            "*",
+            "Content-Type",
+            "x-amz-acl",
+            "x-amz-checksum-crc32",
+            "x-amz-sdk-checksum-algorithm"
+          ],
+          AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"],
+          AllowedOrigins: [
+            "https://summit.nappsnasarawa.com",
+            process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+          ],
+          ExposeHeaders: [
+            "ETag",
+            "x-amz-checksum-crc32",
+            "x-amz-sdk-checksum-algorithm"
+          ],
+          MaxAgeSeconds: 3600
         }
       ]
     }

@@ -65,6 +65,7 @@
     "embla-carousel-react": "latest",
     "framer-motion": "latest",
     "fs": "latest",
+    "googleapis": "^146.0.0",
     "input-otp": "1.4.1",
     "ioredis": "^5.6.0",
     "lucide-react": "^0.454.0",

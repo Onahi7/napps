@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
 import { query, withTransaction } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { StorageService } from '@/lib/storage'
+import { GoogleDriveStorage } from '@/lib/google-drive-storage'
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
 
       if (result.rows[0]?.payment_proof) {
         try {
-          // Delete the file from storage
-          const storage = StorageService.getInstance()
+          // Delete the file from Google Drive
+          const storage = GoogleDriveStorage.getInstance()
           await storage.deleteFile(result.rows[0].payment_proof)
         } catch (error) {
           console.error('Failed to delete payment proof file:', error)

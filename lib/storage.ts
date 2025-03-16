@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from './env';
 import { fileUtils } from './utils';
 
@@ -17,20 +18,24 @@ export class StorageService {
 
   private constructor() {
     try {
-      this.bucketName = env.DO_SPACES_BUCKET;
-      this.region = env.DO_SPACES_REGION;
+      const bucketName = env.DO_SPACES_BUCKET;
+      const region = env.DO_SPACES_REGION;
+      const key = env.DO_SPACES_KEY;
+      const secret = env.DO_SPACES_SECRET;
 
-      if (!env.DO_SPACES_KEY || !env.DO_SPACES_SECRET) {
-        throw new StorageError('Storage credentials are missing');
+      if (!bucketName || !region || !key || !secret) {
+        throw new StorageError('Missing required DigitalOcean Spaces configuration');
       }
 
-      // Initialize S3 client
+      this.bucketName = bucketName;
+      this.region = region;
+
       this.client = new S3Client({
         endpoint: `https://${this.region}.digitaloceanspaces.com`,
         region: this.region,
         credentials: {
-          accessKeyId: env.DO_SPACES_KEY,
-          secretAccessKey: env.DO_SPACES_SECRET
+          accessKeyId: key,
+          secretAccessKey: secret
         },
         forcePathStyle: false
       });
@@ -52,34 +57,53 @@ export class StorageService {
   async uploadFile(file: Buffer, originalName: string, mimeType: string): Promise<string> {
     try {
       const fileName = fileUtils.generateFileName(originalName);
-
-      await this.client.send(new PutObjectCommand({
+      
+      const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
         Body: file,
-        ACL: 'public-read',
         ContentType: mimeType,
+        ACL: 'public-read',
         CacheControl: 'max-age=31536000', // 1 year cache
         Metadata: {
           'original-name': originalName,
           'upload-time': new Date().toISOString()
         }
-      }));
+      });
 
-      // Use CDN URL for better performance
-      const fileUrl = fileUtils.getCdnUrl(fileName, { 
+      await this.client.send(command);
+
+      // Return CDN URL for better performance
+      return fileUtils.getCdnUrl(fileName, { 
         DO_SPACES_BUCKET: this.bucketName, 
         DO_SPACES_REGION: this.region 
       });
-      
-      console.log('[Storage] File uploaded successfully:', fileUrl);
-      return fileUrl;
     } catch (error: any) {
       console.error('[Storage] Upload error:', error);
       if (error.$metadata?.httpStatusCode === 403) {
         throw new StorageError('Access denied. Please check storage permissions.', error);
       }
       throw new StorageError('Failed to upload file. Please try again.', error);
+    }
+  }
+
+  async getPresignedUrl(fileName: string, mimeType: string, expiresIn: number = 600): Promise<string> {
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: fileName,
+        ContentType: mimeType,
+        ACL: 'public-read',
+        Metadata: {
+          'original-name': fileName,
+          'upload-time': new Date().toISOString()
+        }
+      });
+
+      return await getSignedUrl(this.client, command, { expiresIn });
+    } catch (error: any) {
+      console.error('[Storage] Presigned URL generation error:', error);
+      throw new StorageError('Failed to generate upload URL', error);
     }
   }
 

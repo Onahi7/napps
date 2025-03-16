@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { getConfig } from '@/lib/config-service'
 import { revalidatePath } from 'next/cache'
-import { StorageService } from '@/lib/storage'
 
 class PaymentError extends Error {
   constructor(message: string, public code: string, public source: string, public originalError?: any) {
@@ -80,55 +79,25 @@ export async function initializePayment(amount: number) {
 
 export async function uploadPaymentProof(file: File) {
   try {
-    // First get a presigned URL
-    const response = await retryFetch('/api/presigned-url', {
+    // Convert file to FormData
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await retryFetch('/api/upload-proof', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fileType: file.type,
-      }),
+      body: formData,
     });
 
-    const { presignedUrl, fileUrl } = await response.json();
-
-    // Upload directly to DigitalOcean Spaces
-    const uploadResponse = await retryFetch(presignedUrl, {
-      method: 'PUT',
-      body: file,
-      headers: {
-        'Content-Type': file.type,
-      },
-    });
-
-    if (!uploadResponse.ok) {
+    if (!response.ok) {
+      const error = await response.json();
       throw new PaymentError(
-        'Failed to upload file to storage',
-        'STORAGE_ERROR',
-        'upload',
-        uploadResponse
+        error.error || 'Failed to upload payment proof',
+        'UPLOAD_ERROR',
+        'upload'
       );
     }
 
-    // Update profile with new proof URL
-    const updateResponse = await retryFetch('/api/payment-proof', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fileUrl,
-      }),
-    });
-
-    if (!updateResponse.ok) {
-      throw new PaymentError(
-        'Failed to save payment proof',
-        'DATABASE_ERROR',
-        'profile-update'
-      );
-    }
+    const { url: fileUrl } = await response.json();
 
     revalidatePath('/payment');
     revalidatePath('/participant/dashboard');

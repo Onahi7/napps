@@ -11,7 +11,7 @@ import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } f
 import { getParticipantStatus } from "@/actions/profile-actions"
 import { ParticipantPayment } from "./participant-payment"
 
-type PaymentStatus = "pending" | "completed" | "failed" | "proof_submitted"
+type PaymentStatus = "pending" | "completed" | "proof_submitted"
 type AccreditationStatus = "pending" | "completed" | "declined"
 type AccommodationStatus = "not_booked" | "booked" | "checked_in"
 

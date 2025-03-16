@@ -1,22 +1,17 @@
 "use client"
+
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
+import { Loader2, Upload, Copy, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Copy, Upload, AlertCircle } from "lucide-react"
-import { useSession } from 'next-auth/react'
-import { getConfig } from '@/lib/config-service'
-import { uploadPaymentProof, initializePayment, getPaymentStatus } from "@/actions/payment-actions"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-
-const BANK_DETAILS = {
-  bankName: "Unity Bank",
-  accountName: "N.A.A.PS NASARAWA STATE",
-  accountNumber: "0017190877"
-}
+import { uploadPaymentProof } from "@/actions/payment-actions"
 
 export default function PaymentPage() {
   const { data: session, status } = useSession();
@@ -32,24 +27,24 @@ export default function PaymentPage() {
 
   useEffect(() => {
     async function initialize() {
-      if (!session?.user) return;
-
       try {
-        console.log('Getting registration amount...');
-        const config = await getConfig('registrationAmount');
-        const amount = config ? Number.parseFloat(config) : 10000;
-        setRegistrationAmount(amount);
-        console.log('Registration amount:', amount);
+        const response = await fetch('/api/config/registration-amount');
+        const data = await response.json();
+        setRegistrationAmount(data.amount);
       } catch (error) {
-        console.error('Payment initialization error:', error);
-        setError('Failed to initialize payment. Please try refreshing the page.');
+        console.error('Error fetching registration amount:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load registration amount",
+          variant: "destructive"
+        });
       } finally {
         setLoadingConfig(false);
       }
     }
 
     initialize();
-  }, [session]);
+  }, [session, toast]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -130,7 +125,7 @@ export default function PaymentPage() {
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       setPaymentProofFile(null);
-      
+
       // Show success message with loading indicator before redirect
       setSuccessMessage("Upload successful! Redirecting to dashboard...");
       
@@ -168,83 +163,91 @@ export default function PaymentPage() {
   const isLoadingReference = status === 'loading' || loadingConfig;
 
   // Return early if not authenticated
+  if (status === 'unauthenticated') return null;
+
+  // Return loading state while checking authentication
   if (status === 'loading' || loadingConfig) {
     return (
-      <div className='flex h-screen items-center justify-center'>
-        <Loader2 className='h-8 w-8 animate-spin text-primary' />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin" />
+          <p className="mt-2">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  if (!session) {
-    return null;
-  }
-
   return (
-    <div className="container mx-auto p-4 py-8">
-      <h1 className="mb-8 text-3xl font-bold">Payment Details</h1>
-      <div className="mx-auto max-w-md">
+    <div className="container max-w-2xl py-8">
+      <div className="space-y-8">
         <Card>
           <CardHeader>
-            <CardTitle>Bank Transfer Details</CardTitle>
-            <CardDescription>Please transfer the exact amount and use your reference code in the transfer narration</CardDescription>
+            <CardTitle>Payment Information</CardTitle>
+            <CardDescription>
+              Please make a bank transfer of ₦{registrationAmount?.toLocaleString() ?? '0'} to the account below
+            </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-6">
-            {error && (
-              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                <p className="font-medium">Error</p>
-                <p>{error}</p>
-              </div>
-            )}
-            {successMessage && (
-              <div className="rounded-md bg-green-50 p-3 text-sm text-green-600">
-                <p className="font-medium">Success</p>
-                <p>{successMessage}</p>
-              </div>
-            )}
-            <div className="rounded-md bg-muted p-4">
-              <div className="flex items-center justify-between">
-                <span>Registration Fee:</span>
-                <span className="text-xl font-bold">₦{registrationAmount?.toLocaleString()}</span>
-              </div>
-            </div>
-            
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Bank Name</Label>
-                  <p className="text-lg font-medium">{BANK_DETAILS.bankName}</p>
+              <div>
+                <Label>Account Name</Label>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>NAPPS Summit Account</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('NAPPS Summit Account')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(BANK_DETAILS.bankName)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Account Name</Label>
-                  <p className="text-lg font-medium">{BANK_DETAILS.accountName}</p>
+              <div>
+                <Label>Bank</Label>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>Zenith Bank</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('Zenith Bank')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(BANK_DETAILS.accountName)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Account Number</Label>
-                  <p className="text-lg font-medium">{BANK_DETAILS.accountNumber}</p>
+              <div>
+                <Label>Account Number</Label>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>1234567890</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('1234567890')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(BANK_DETAILS.accountNumber)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
+              </div>
+
+              <div>
+                <Label>Amount</Label>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>₦{registrationAmount?.toLocaleString() ?? '0'}</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard(registrationAmount?.toString() ?? '0')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
-            {/* Payment Reference Instructions */}
-            <Alert className="border-2 border-primary/50 bg-primary/5">
-              <AlertCircle className="h-5 w-5 text-primary" />
-              <AlertTitle className="text-primary">Important Transfer Instructions</AlertTitle>
+            <Separator />
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {successMessage && (
+              <Alert>
+                <AlertDescription>{successMessage}</AlertDescription>
+              </Alert>
+            )}
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription className="mt-2">
                 Please include your phone number in the transfer narration/reference when making the payment. This helps us match your payment to your registration.
               </AlertDescription>
@@ -268,7 +271,7 @@ export default function PaymentPage() {
             <Button 
               className="w-full" 
               onClick={handleProofUpload} 
-              disabled={!paymentProofFile || uploadingProof || isLoadingReference}
+              disabled={!paymentProofFile || uploadingProof}
             >
               {uploadingProof ? (
                 <>
@@ -286,6 +289,6 @@ export default function PaymentPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }
 

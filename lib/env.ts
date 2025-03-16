@@ -12,10 +12,12 @@ export const env = createEnv({
     NEXTAUTH_SECRET: z.string(),
     NEXTAUTH_URL: z.string().url(),
     PAYSTACK_SECRET_KEY: z.string(),
-    DO_SPACES_KEY: z.string(),
-    DO_SPACES_SECRET: z.string(),
-    DO_SPACES_BUCKET: z.string().default('napps-store'),
-    DO_SPACES_REGION: z.string().default('sfo3'),
+    DO_SPACES_KEY: z.string().optional(),
+    DO_SPACES_SECRET: z.string().optional(),
+    DO_SPACES_BUCKET: z.string().optional(),
+    DO_SPACES_REGION: z.string().optional(),
+    GOOGLE_DRIVE_CREDENTIALS: z.string(),
+    GOOGLE_DRIVE_FOLDER_ID: z.string().optional(),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.string().url(),
@@ -37,6 +39,8 @@ export const env = createEnv({
     DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,
     DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET,
     DO_SPACES_REGION: process.env.DO_SPACES_REGION,
+    GOOGLE_DRIVE_CREDENTIALS: process.env.GOOGLE_DRIVE_CREDENTIALS || '{}',
+    GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID,
   },
 })
 

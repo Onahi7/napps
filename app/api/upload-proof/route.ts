@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { StorageService, StorageError } from '@/lib/storage';
+import { GoogleDriveStorage, GoogleDriveStorageError } from '@/lib/google-drive-storage';
 import { withTransaction, query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify profile exists and payment is not already completed
+    // Check payment status
     const profile = await query(
       'SELECT payment_status FROM profiles WHERE id = $1',
       [session.user.id]
@@ -68,14 +68,14 @@ export async function POST(request: NextRequest) {
     console.log('[UploadAPI] Converting file to buffer...');
     const buffer = Buffer.from(await file.arrayBuffer());
     
-    console.log('[UploadAPI] Uploading file to storage...');
-    const storage = StorageService.getInstance();
+    console.log('[UploadAPI] Uploading file to Google Drive...');
+    const storage = GoogleDriveStorage.getInstance();
     let fileUrl: string;
     
     try {
       fileUrl = await storage.uploadFile(buffer, file.name, file.type);
     } catch (error) {
-      if (error instanceof StorageError) {
+      if (error instanceof GoogleDriveStorageError) {
         console.error('[UploadAPI] Storage error:', error.originalError);
         return NextResponse.json(
           { error: error.message },
