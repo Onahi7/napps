@@ -1,30 +1,45 @@
 import { S3Client, PutBucketCorsCommand } from '@aws-sdk/client-s3';
-import { env } from '../lib/env';
+import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// Load environment variables
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: resolve(__dirname, '../.env') });
 
 async function configureCors() {
+  const {
+    DO_SPACES_KEY,
+    DO_SPACES_SECRET,
+    DO_SPACES_BUCKET,
+    DO_SPACES_REGION
+  } = process.env;
+
+  if (!DO_SPACES_KEY || !DO_SPACES_SECRET) {
+    throw new Error('Missing required Digital Ocean Spaces credentials');
+  }
+
   const client = new S3Client({
-    endpoint: `https://${env.DO_SPACES_REGION}.digitaloceanspaces.com`,
-    region: env.DO_SPACES_REGION,
+    endpoint: `https://${DO_SPACES_REGION}.digitaloceanspaces.com`,
+    region: DO_SPACES_REGION,
     credentials: {
-      accessKeyId: env.DO_SPACES_KEY,
-      secretAccessKey: env.DO_SPACES_SECRET
+      accessKeyId: DO_SPACES_KEY,
+      secretAccessKey: DO_SPACES_SECRET
     },
     forcePathStyle: false
   });
 
   const corsConfig = {
-    Bucket: env.DO_SPACES_BUCKET,
+    Bucket: DO_SPACES_BUCKET,
     CORSConfiguration: {
       CORSRules: [
         {
           AllowedHeaders: ["*"],
           AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"],
-          AllowedOrigins: [
-            "http://localhost:3000",
-            "https://summit.nappsnasarawa.com"
-          ],
+          AllowedOrigins: ["https://summit.nappsnasarawa.com"],
           ExposeHeaders: ["ETag"],
-          MaxAgeSeconds: 3600
+          MaxAgeSeconds: 0
         }
       ]
     }

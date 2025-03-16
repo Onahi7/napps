@@ -4,23 +4,24 @@
 -- Create extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email TEXT UNIQUE NOT NULL,
+  email VARCHAR(255) NOT NULL,
   password_hash TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create profiles table with all fields
 CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'validator', 'participant')),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email VARCHAR(255) NOT NULL,
+  full_name VARCHAR(255) NOT NULL,
+  phone VARCHAR(20) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'participant',
   state TEXT,
   lga TEXT,
   chapter TEXT,
@@ -28,15 +29,16 @@ CREATE TABLE IF NOT EXISTS profiles (
   position TEXT,
   avatar_url TEXT,
   payment_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'proof_submitted', 'completed')),
-  payment_reference TEXT UNIQUE,
-  payment_amount INTEGER,
+  payment_reference VARCHAR(255),
+  payment_amount DECIMAL,
   payment_date TIMESTAMP WITH TIME ZONE,
   payment_proof TEXT,
-  accreditation_status TEXT NOT NULL DEFAULT 'pending' CHECK (accreditation_status IN ('pending', 'completed')),
+  accreditation_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (accreditation_status IN ('pending', 'completed')),
   accreditation_date TIMESTAMP WITH TIME ZONE,
   qr_code TEXT,
-  unique_id TEXT UNIQUE,
-  -- School-related fields from phone-login-update.sql
+  unique_id VARCHAR(255),
+  bio TEXT,
+  dietary_requirements TEXT,
   school_name TEXT,
   school_address TEXT,
   school_city TEXT,
@@ -44,19 +46,21 @@ CREATE TABLE IF NOT EXISTS profiles (
   school_type TEXT,
   napps_position TEXT,
   napps_chapter TEXT,
-  -- Search vector for full-text search
   search_vector tsvector,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT check_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
+  CONSTRAINT check_phone_format CHECK (phone ~* '^\d{10,11}$')
 );
 
 -- Create config table
 CREATE TABLE IF NOT EXISTS config (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  key TEXT UNIQUE NOT NULL,
+  key VARCHAR(255) NOT NULL UNIQUE,
   value JSONB NOT NULL,
   description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create hotels table
@@ -112,6 +116,54 @@ CREATE TABLE IF NOT EXISTS scans (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create validator_assignments table
+CREATE TABLE IF NOT EXISTS validator_assignments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  validator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  meal_type VARCHAR(20) CHECK (meal_type IN ('breakfast', 'dinner', 'accreditation')),
+  location VARCHAR(255) NOT NULL,
+  schedule_date DATE NOT NULL,
+  schedule_time TIME NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed')),
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create meal_validations table
+CREATE TABLE IF NOT EXISTS meal_validations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  participant_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  validator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  meal_type VARCHAR(20) CHECK (meal_type IN ('breakfast', 'dinner')),
+  date DATE NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'validated', 'expired')),
+  validated_at TIMESTAMP WITH TIME ZONE,
+  validator_name VARCHAR(255),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create accreditations table
+CREATE TABLE IF NOT EXISTS accreditations (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES profiles(id),
+  status VARCHAR(50),
+  accreditation_date DATE,
+  accreditation_time TIME,
+  validator VARCHAR(255),
+  location VARCHAR(255),
+  badge_collected BOOLEAN DEFAULT FALSE,
+  badge_collection_time TIMESTAMP,
+  materials_collected BOOLEAN DEFAULT FALSE,
+  materials_collection_time TIMESTAMP,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id)
+);
+
 -- Add all indexes from various migration files
 -- Core indexes from 001_init_postgresql.sql
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles USING btree (email);
@@ -146,7 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_search ON profiles USING gin(search_vect
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = NOW();
+  NEW.updated_at = CURRENT_TIMESTAMP;
   RETURN NEW;
 END;
 $$ language 'plpgsql';
@@ -238,6 +290,11 @@ CREATE TRIGGER update_bookings_updated_at
 
 CREATE TRIGGER update_resources_updated_at
   BEFORE UPDATE ON resources
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_config_updated_at
+  BEFORE UPDATE ON config
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
