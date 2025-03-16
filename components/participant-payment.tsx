@@ -210,9 +210,9 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
                 <div className="space-y-2">
                   <h3 className="font-medium">Bank Details</h3>
                   <div className="text-sm">
-                    <p><span className="font-medium">Bank:</span> Sterling Bank</p>
-                    <p><span className="font-medium">Account Name:</span> NAPPS North Central</p>
-                    <p><span className="font-medium">Account Number:</span> 0026286382</p>
+                    <p><span className="font-medium">Bank:</span> Unity Bank</p>
+                    <p><span className="font-medium">Account Name:</span> N.A.A.PS NASARAWA STATE</p>
+                    <p><span className="font-medium">Account Number:</span> 0017190877</p>
                   </div>
                 </div>
                 <Separator className="my-4" />

@@ -71,12 +71,15 @@ export async function uploadPaymentProof(formData: FormData) {
   console.log('Starting payment proof upload...');
   
   try {
+    // Step 1: Check session and authorization
+    console.log('Verifying session...');
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       console.error('Upload failed: Unauthorized - No session');
       throw new Error('Unauthorized');
     }
 
+    // Step 2: Get and validate file from form data
     const file = formData.get('file') as File;
     const reference = formData.get('reference') as string;
 
@@ -85,61 +88,93 @@ export async function uploadPaymentProof(formData: FormData) {
       throw new Error('Please select a file to upload');
     }
 
-    // Check if user has a payment reference
-    const profile = await query(
-      'SELECT payment_reference, payment_status FROM profiles WHERE id = $1',
-      [session.user.id]
-    );
+    console.log('File received:', file.name, 'type:', file.type, 'size:', file.size);
 
-    if (profile.rowCount === 0) {
-      throw new Error('Profile not found');
-    }
-
-    // If no reference exists, generate one
-    const paymentReference = profile.rows[0].payment_reference || reference || 
-      `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-
-    if (profile.rows[0].payment_status === 'completed') {
-      console.error('Upload failed: Payment already completed');
-      throw new Error('Payment already completed');
-    }
-
-    console.log('Validating file...');
-    const buffer = Buffer.from(await file.arrayBuffer());
-    
-    if (buffer.length > 5 * 1024 * 1024) {
-      throw new Error('File size too large. Maximum size is 5MB');
-    }
-
-    if (!['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(file.type)) {
-      throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF');
-    }
-
-    const fileName = `payment-proofs/${session.user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    console.log('Uploading to storage...', fileName);
-    
-    const storage = StorageService.getInstance();
-    const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
-    console.log('File uploaded successfully to:', fileUrl);
-
-    await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE profiles 
-         SET payment_proof = $1,
-             payment_status = 'proof_submitted',
-             payment_reference = $2,
-             updated_at = NOW()
-         WHERE id = $3`,
-        [fileUrl, paymentReference, session.user.id]
+    // Step 3: Check user profile and payment status
+    console.log('Checking profile data...');
+    try {
+      const profile = await query(
+        'SELECT payment_reference, payment_status FROM profiles WHERE id = $1',
+        [session.user.id]
       );
-    });
 
-    console.log('Database updated successfully');
-    revalidatePath('/payment');
-    revalidatePath('/participant/dashboard');
-    revalidatePath('/admin/payments');
+      if (profile.rowCount === 0) {
+        console.error('Upload failed: Profile not found for user ID', session.user.id);
+        throw new Error('Profile not found');
+      }
 
-    return { success: true, fileUrl };
+      console.log('Profile found, payment status:', profile.rows[0].payment_status);
+
+      if (profile.rows[0].payment_status === 'completed') {
+        console.error('Upload failed: Payment already completed');
+        throw new Error('Payment already completed');
+      }
+
+      // If no reference exists, generate one
+      const paymentReference = profile.rows[0].payment_reference || reference || 
+        `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      console.log('Using payment reference:', paymentReference);
+
+      // Step 4: Validate file format and size
+      console.log('Validating file...');
+      const buffer = Buffer.from(await file.arrayBuffer());
+      
+      if (buffer.length > 5 * 1024 * 1024) {
+        throw new Error('File size too large. Maximum size is 5MB');
+      }
+
+      if (!['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(file.type)) {
+        throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF');
+      }
+
+      // Step 5: Upload to storage
+      const fileName = `payment-proofs/${session.user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      console.log('Uploading to storage...', fileName);
+      
+      try {
+        const storage = StorageService.getInstance();
+        console.log('Storage service initialized');
+        
+        const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
+        console.log('File uploaded successfully to:', fileUrl);
+
+        // Step 6: Update database with payment proof
+        console.log('Updating database with file URL...');
+        await withTransaction(async (client) => {
+          await client.query(
+            `UPDATE profiles 
+             SET payment_proof = $1,
+                 payment_status = 'proof_submitted',
+                 payment_reference = $2,
+                 updated_at = NOW()
+             WHERE id = $3`,
+            [fileUrl, paymentReference, session.user.id]
+          );
+        });
+
+        console.log('Database updated successfully');
+        revalidatePath('/payment');
+        revalidatePath('/participant/dashboard');
+        revalidatePath('/admin/payments');
+
+        return { success: true, fileUrl };
+      } catch (storageError: any) {
+        console.error('Storage service error:', storageError);
+        // Provide more specific error message for storage issues
+        if (storageError.name === 'CredentialsProviderError') {
+          throw new Error('Storage configuration issue. Please contact support.');
+        } else if (storageError.name === 'NoSuchBucket') {
+          throw new Error('Storage bucket not found. Please contact support.');
+        } else {
+          throw new Error(`Storage error: ${storageError.message || 'Unknown storage error'}`);
+        }
+      }
+
+    } catch (dbError: any) {
+      console.error('Database error:', dbError);
+      throw new Error(`Database error: ${dbError.message}`);
+    }
+
   } catch (error: any) {
     console.error('Payment proof upload error:', error);
     throw new Error(error.message || 'Failed to upload payment proof');
