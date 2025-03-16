@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withTransaction } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
+import { query, withTransaction } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import fs from 'fs/promises'
-import path from 'path'
+import { StorageService } from '@/lib/storage'
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,11 +25,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { reference } = await request.json()
+    const { phone } = await request.json()
     
-    if (!reference) {
+    if (!phone) {
       return NextResponse.json(
-        { error: 'Payment reference is required' },
+        { error: 'Phone number is required' },
         { status: 400 }
       )
     }
@@ -38,39 +37,41 @@ export async function POST(request: NextRequest) {
     return await withTransaction(async (client) => {
       // Get the current payment proof file path
       const result = await client.query(
-        'SELECT payment_proof FROM profiles WHERE payment_reference = $1',
-        [reference]
+        'SELECT p.payment_proof FROM profiles p JOIN users u ON p.id = u.id WHERE u.phone = $1',
+        [phone]
       )
 
       if (result.rows[0]?.payment_proof) {
-        const proofPath = result.rows[0].payment_proof
-        // Remove the file if it exists
         try {
-          const fullPath = path.join(process.cwd(), 'public', proofPath)
-          await fs.unlink(fullPath)
+          // Delete the file from storage
+          const storage = StorageService.getInstance()
+          await storage.deleteFile(result.rows[0].payment_proof)
         } catch (error) {
-          console.error('Error deleting payment proof file:', error)
-          // Continue even if file deletion fails
+          console.error('Failed to delete payment proof file:', error)
+          // Continue anyway as we want to update the payment status
         }
       }
 
-      // Reset payment status to pending and clear proof
+      // Reset payment status and proof
       await client.query(
-        `UPDATE profiles 
+        `UPDATE profiles p
          SET payment_status = 'pending',
              payment_proof = NULL,
              updated_at = NOW()
-         WHERE payment_reference = $1`,
-        [reference]
+         FROM users u
+         WHERE p.id = u.id AND u.phone = $1`,
+        [phone]
       )
 
       revalidatePath('/admin/payments')
+      revalidatePath('/participant/dashboard')
+
       return NextResponse.json({ success: true })
     })
   } catch (error: any) {
-    console.error('Error rejecting payment:', error)
+    console.error('Payment rejection error:', error)
     return NextResponse.json(
-      { error: 'Failed to reject payment' },
+      { error: error.message || 'Failed to reject payment' },
       { status: 500 }
     )
   }

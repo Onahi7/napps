@@ -22,19 +22,19 @@ export default function RegistrationSuccessPage() {
     }
   }, [status, router])
 
-  const handlePaymentSetup = async () => {
+  const handlePayment = async () => {
     setIsInitializing(true)
     setError(null)
     try {
-      const { reference } = await initializePayment(registrationAmount)
-      if (reference) {
-        router.push(`/payment?reference=${reference}`)
+      const response = await initializePayment(registrationAmount)
+      if (response.success) {
+        router.push(`/payment`)
       } else {
-        throw new Error("Failed to initialize payment")
+        setError('Failed to initialize payment')
       }
-    } catch (err: any) {
-      console.error("Payment setup error:", err)
-      setError(err.message || "Failed to set up payment")
+    } catch (error: any) {
+      console.error('Payment initialization error:', error)
+      setError(error.message || 'Failed to initialize payment')
     } finally {
       setIsInitializing(false)
     }
@@ -82,8 +82,8 @@ export default function RegistrationSuccessPage() {
 
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/50 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  Please proceed to make your bank transfer using the unique reference code that will be provided.
-                  Make sure to include your reference code in your transfer narration.
+                  <strong>Important:</strong> When making your bank transfer, please use your registered phone number 
+                  ({session.user.phone}) as the payment reference in your transfer narration.
                 </p>
               </div>
 
@@ -97,7 +97,7 @@ export default function RegistrationSuccessPage() {
           <CardFooter className="flex flex-col gap-4">
             <Button
               className="w-full bg-napps-gold text-black hover:bg-napps-gold/90"
-              onClick={handlePaymentSetup}
+              onClick={handlePayment}
               disabled={isInitializing}
             >
               {isInitializing ? (

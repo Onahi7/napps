@@ -22,7 +22,6 @@ interface Payment {
   full_name: string
   email: string
   phone: string
-  payment_reference: string
   payment_proof: string
   payment_amount: number
   payment_status: string
@@ -57,12 +56,12 @@ export function AdminPaymentReview() {
     }
   }
 
-  async function handleApprove(reference: string) {
+  async function handleApprove(phone: string) {
     try {
       const response = await fetch('/api/admin/payments/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({ phone }),
       })
 
       if (!response.ok) throw new Error('Failed to verify payment')
@@ -73,7 +72,7 @@ export function AdminPaymentReview() {
       })
 
       // Update the local state
-      setPayments(payments.filter(p => p.payment_reference !== reference))
+      setPayments(payments.filter(p => p.phone !== phone))
     } catch (error) {
       console.error('Error approving payment:', error)
       toast({
@@ -84,12 +83,12 @@ export function AdminPaymentReview() {
     }
   }
 
-  async function handleReject(reference: string) {
+  async function handleReject(phone: string) {
     try {
       const response = await fetch('/api/admin/payments/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({ phone }),
       })
 
       if (!response.ok) throw new Error('Failed to reject payment')
@@ -100,7 +99,7 @@ export function AdminPaymentReview() {
       })
 
       // Update the local state
-      setPayments(payments.filter(p => p.payment_reference !== reference))
+      setPayments(payments.filter(p => p.phone !== phone))
     } catch (error) {
       console.error('Error rejecting payment:', error)
       toast({
@@ -113,7 +112,7 @@ export function AdminPaymentReview() {
 
   const filteredPayments = payments.filter(payment => 
     payment.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.payment_reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
     payment.email.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -138,13 +137,13 @@ export function AdminPaymentReview() {
 
       <div className="grid gap-6 md:grid-cols-2">
         {filteredPayments.map((payment) => (
-          <Card key={payment.payment_reference}>
+          <Card key={payment.phone}>
             <CardContent className="p-6">
               <div className="space-y-4">
                 <div>
                   <h3 className="font-semibold">{payment.full_name}</h3>
                   <p className="text-sm text-muted-foreground">{payment.email}</p>
-                  <p className="text-sm text-muted-foreground">Reference: {payment.payment_reference}</p>
+                  <p className="text-sm text-muted-foreground">Phone: {payment.phone}</p>
                   <p className="text-sm font-medium">Amount: ₦{payment.payment_amount.toLocaleString()}</p>
                 </div>
 
@@ -165,7 +164,7 @@ export function AdminPaymentReview() {
                         <DialogHeader>
                           <DialogTitle>Payment Proof</DialogTitle>
                           <DialogDescription>
-                            From {selectedPayment.full_name} ({selectedPayment.payment_reference})
+                            From {selectedPayment.full_name} ({selectedPayment.phone})
                           </DialogDescription>
                         </DialogHeader>
                         <div className="aspect-[3/2] relative overflow-hidden rounded-md border">
@@ -184,7 +183,7 @@ export function AdminPaymentReview() {
                 <div className="flex gap-2">
                   <Button 
                     className="flex-1"
-                    onClick={() => handleApprove(payment.payment_reference)}
+                    onClick={() => handleApprove(payment.phone)}
                   >
                     <CheckCircle className="mr-2 h-4 w-4" />
                     Approve
@@ -192,7 +191,7 @@ export function AdminPaymentReview() {
                   <Button 
                     variant="destructive" 
                     className="flex-1"
-                    onClick={() => handleReject(payment.payment_reference)}
+                    onClick={() => handleReject(payment.phone)}
                   >
                     <XCircle className="mr-2 h-4 w-4" />
                     Reject

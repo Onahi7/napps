@@ -122,6 +122,7 @@ export async function getParticipantStatus(userId: string | undefined) {
   const result = await query(
     `SELECT 
       payment_status,
+      payment_proof,
       accreditation_status,
       accommodation_status
      FROM profiles 
@@ -131,6 +132,7 @@ export async function getParticipantStatus(userId: string | undefined) {
 
   return {
     payment: result.rows[0]?.payment_status || 'pending',
+    payment_proof: result.rows[0]?.payment_proof || null,
     accreditation: result.rows[0]?.accreditation_status || 'pending',
     accommodation: result.rows[0]?.accommodation_status || 'not_booked'
   }

@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
         u.full_name,
         u.email,
         u.phone,
-        p.payment_reference,
         p.payment_proof,
         p.payment_amount,
         p.payment_status
@@ -45,7 +44,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Error fetching payments:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch payments' },
+      { error: error.message || 'Failed to fetch payments' },
       { status: 500 }
     )
   }

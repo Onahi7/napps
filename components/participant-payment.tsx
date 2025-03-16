@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,23 +8,21 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, Upload, Copy, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Upload, Copy, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { initializePayment, uploadPaymentProof } from "@/actions/payment-actions"
+import { uploadPaymentProof } from "@/actions/payment-actions"
 import Image from "next/image"
 
 interface PaymentProps {
   amount: number
-  reference?: string
+  phoneNumber: string
   status?: string
   proofUrl?: string
 }
 
-export function ParticipantPayment({ amount, reference, status, proofUrl }: PaymentProps) {
+export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: PaymentProps) {
   const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [isUploadDisabled, setIsUploadDisabled] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -68,36 +66,14 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
     setSelectedFile(file)
   }
 
-  const handlePaymentInit = async () => {
-    setLoading(true)
-    try {
-      const result = await initializePayment(amount)
-      // Refresh the page to show new payment reference
-      window.location.reload()
-    } catch (error: any) {
-      console.error('Payment initialization error:', error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to initialize payment",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleProofUpload = async () => {
     if (!selectedFile || uploading) return;
 
     setUploading(true);
-    setIsUploadDisabled(true);
 
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
-      if (reference) {
-        formData.append('reference', reference);
-      }
 
       const result = await uploadPaymentProof(formData);
       
@@ -129,7 +105,6 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
       });
     } finally {
       setUploading(false);
-      setIsUploadDisabled(false);
     }
   };
 
@@ -189,89 +164,75 @@ export function ParticipantPayment({ amount, reference, status, proofUrl }: Paym
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!reference ? (
-          <Button 
-            onClick={handlePaymentInit}
-            disabled={loading}
-            className="w-full"
-          >
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Initialize Payment
-          </Button>
-        ) : (
-          <Tabs defaultValue="bank" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="bank">Bank Transfer</TabsTrigger>
-              <TabsTrigger value="upload">Upload Proof</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="bank" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="bank">Bank Transfer</TabsTrigger>
+            <TabsTrigger value="upload">Upload Proof</TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="bank" className="space-y-4">
-              <div className="rounded-md border p-4">
-                <div className="space-y-2">
-                  <h3 className="font-medium">Bank Details</h3>
-                  <div className="text-sm">
-                    <p><span className="font-medium">Bank:</span> Unity Bank</p>
-                    <p><span className="font-medium">Account Name:</span> N.A.A.PS NASARAWA STATE</p>
-                    <p><span className="font-medium">Account Number:</span> 0017190877</p>
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                <div className="space-y-2">
-                  <Label>Payment Reference</Label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      value={reference} 
-                      readOnly 
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleCopy(reference || '')}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
+          <TabsContent value="bank" className="space-y-4">
+            <div className="rounded-md border p-4">
+              <div className="space-y-2">
+                <h3 className="font-medium">Bank Details</h3>
+                <div className="text-sm">
+                  <p><span className="font-medium">Bank:</span> Unity Bank</p>
+                  <p><span className="font-medium">Account Name:</span> N.A.A.PS NASARAWA STATE</p>
+                  <p><span className="font-medium">Account Number:</span> 0017190877</p>
                 </div>
               </div>
-            </TabsContent>
 
-            <TabsContent value="upload" className="space-y-4">
-              <div className="grid w-full max-w-sm items-center gap-1.5">
-                <Label htmlFor="proof">Upload Payment Proof</Label>
-                <Input
-                  id="proof"
-                  type="file"
-                  accept="image/jpeg,image/png,image/jpg,application/pdf"
-                  onChange={handleFileChange}
-                  disabled={uploading}
-                  className={uploading ? "opacity-50 cursor-not-allowed" : ""}
-                  ref={fileInputRef}
-                />
-                <p className="text-sm text-muted-foreground">
-                  Maximum file size: 5MB. Supported formats: JPEG, PNG, PDF
-                </p>
+              <Separator className="my-4" />
+
+              <div className="space-y-2">
+                <h3 className="font-medium">Payment Amount</h3>
+                <p className="text-2xl font-bold">₦{amount.toLocaleString()}</p>
               </div>
 
-              <Button 
-                onClick={handleProofUpload}
-                disabled={uploading || !selectedFile || isUploadDisabled}
-                className="w-full relative"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin absolute left-4" />
-                    <span className="pl-6">Uploading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload Proof
-                  </>
-                )}
-              </Button>
-            </TabsContent>
-          </Tabs>
-        )}
+              <Separator className="my-4" />
+
+              <div className="space-y-2">
+                <h3 className="font-medium">Important</h3>
+                <p className="text-sm text-muted-foreground">Please include your phone number in the transfer narration/reference when making the payment. This helps us match your payment to your registration.</p>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="upload" className="space-y-4">
+            <div className="grid w-full max-w-sm items-center gap-1.5">
+              <Label htmlFor="proof">Upload Payment Proof</Label>
+              <Input
+                id="proof"
+                type="file"
+                accept="image/jpeg,image/png,image/jpg,application/pdf"
+                onChange={handleFileChange}
+                disabled={uploading}
+                className={uploading ? "opacity-50 cursor-not-allowed" : ""}
+                ref={fileInputRef}
+              />
+              <p className="text-sm text-muted-foreground">
+                Maximum file size: 5MB. Supported formats: JPEG, PNG, PDF
+              </p>
+            </div>
+
+            <Button 
+              onClick={handleProofUpload}
+              disabled={uploading || !selectedFile}
+              className="w-full relative"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin absolute left-4" />
+                  <span className="pl-6">Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Proof
+                </>
+              )}
+            </Button>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   )

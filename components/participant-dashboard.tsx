@@ -9,10 +9,18 @@ import Link from "next/link"
 import { useAuth } from "@/lib/auth-hooks"
 import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
 import { getParticipantStatus } from "@/actions/profile-actions"
+import { ParticipantPayment } from "./participant-payment"
 
 type PaymentStatus = "pending" | "completed" | "failed" | "proof_submitted"
 type AccreditationStatus = "pending" | "completed" | "declined"
 type AccommodationStatus = "not_booked" | "booked" | "checked_in"
+
+interface ParticipantStatus {
+  payment: PaymentStatus;
+  payment_proof: string | null;
+  accreditation: AccreditationStatus;
+  accommodation: AccommodationStatus;
+}
 
 export function ParticipantDashboard() {
   const { user, profile } = useAuth()
@@ -32,6 +40,7 @@ export function ParticipantDashboard() {
     accreditation: "pending" as AccreditationStatus,
     accommodation: "not_booked" as AccommodationStatus
   })
+  const [paymentProof, setPaymentProof] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -50,6 +59,7 @@ export function ParticipantDashboard() {
             accreditation: participantStatus.accreditation as AccreditationStatus,
             accommodation: participantStatus.accommodation as AccommodationStatus
           })
+          setPaymentProof(participantStatus.payment_proof)
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error)
@@ -132,6 +142,12 @@ export function ParticipantDashboard() {
              status.payment === "proof_submitted" ? "Proof Submitted" : 
              "Pending Payment"}
           </Badge>
+          <ParticipantPayment 
+            amount={20000 - registrationAmount} 
+            phoneNumber={profile?.phone || ''}
+            status={status.payment}
+            proofUrl={paymentProof || undefined}
+          />
         </CardContent>
         <CardFooter>
           {status.payment !== "completed" && status.payment !== "proof_submitted" && (

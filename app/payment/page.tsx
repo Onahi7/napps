@@ -25,9 +25,7 @@ export default function PaymentPage() {
   const searchParams = useSearchParams();
   const [registrationAmount, setRegistrationAmount] = useState<number | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
-  const [loadingReference, setLoadingReference] = useState(true);
   const [uploadingProof, setUploadingProof] = useState(false);
-  const [paymentReference, setPaymentReference] = useState<string | null>(null);
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,40 +34,21 @@ export default function PaymentPage() {
       if (!session?.user) return;
 
       try {
-        setLoadingReference(true);
-        // First get the registration amount
+        console.log('Getting registration amount...');
         const config = await getConfig('registrationAmount');
         const amount = config ? Number.parseFloat(config) : 10000;
         setRegistrationAmount(amount);
-        
-        // Then get existing payment status
-        const paymentStatus = await getPaymentStatus();
-        
-        // Check URL parameters first
-        const ref = searchParams?.get('reference');
-        if (ref) {
-          setPaymentReference(ref);
-        } 
-        // Then check existing reference from database
-        else if (paymentStatus?.payment_reference) {
-          setPaymentReference(paymentStatus.payment_reference);
-        }
-        // Finally, create new reference if none exists
-        else {
-          const result = await initializePayment(amount);
-          setPaymentReference(result.reference);
-        }
+        console.log('Registration amount:', amount);
       } catch (error) {
-        console.error('Error initializing payment:', error);
+        console.error('Payment initialization error:', error);
         setError('Failed to initialize payment. Please try refreshing the page.');
       } finally {
-        setLoadingReference(false);
         setLoadingConfig(false);
       }
     }
 
     initialize();
-  }, [session, searchParams]);
+  }, [session]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -122,10 +101,10 @@ export default function PaymentPage() {
   };
 
   const handleProofUpload = async () => {
-    if (!paymentProofFile || !paymentReference) {
+    if (!paymentProofFile) {
       toast({
         title: "Error",
-        description: "Please select a file and ensure you have a payment reference",
+        description: "Please select a file",
         variant: "destructive"
       });
       return;
@@ -138,7 +117,6 @@ export default function PaymentPage() {
       // Create form data
       const formData = new FormData();
       formData.append('file', paymentProofFile);
-      formData.append('reference', paymentReference);
       
       const result = await uploadPaymentProof(formData);
       
@@ -183,7 +161,7 @@ export default function PaymentPage() {
   }, [status, router]);
 
   // Add loading state for reference specifically
-  const isLoadingReference = status === 'loading' || loadingConfig || loadingReference;
+  const isLoadingReference = status === 'loading' || loadingConfig;
 
   // Return early if not authenticated
   if (status === 'loading' || loadingConfig) {
@@ -252,30 +230,12 @@ export default function PaymentPage() {
               </div>
             </div>
 
-            {/* Payment Reference Section - Highlighted */}
+            {/* Payment Reference Instructions */}
             <Alert className="border-2 border-primary/50 bg-primary/5">
               <AlertCircle className="h-5 w-5 text-primary" />
-              <AlertTitle className="text-primary">Payment Reference</AlertTitle>
+              <AlertTitle className="text-primary">Important Transfer Instructions</AlertTitle>
               <AlertDescription className="mt-2">
-                <span className="font-semibold text-muted-foreground">IMPORTANT: Include this reference in your transfer narration</span>
-                <div className="mt-2 flex items-center justify-between rounded-md bg-background p-3">
-                  {isLoadingReference ? (
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm">Loading reference...</span>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-lg font-bold text-primary">{paymentReference}</span>
-                      {paymentReference && (
-                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(paymentReference)}>
-                          <Copy className="mr-2 h-4 w-4" />
-                          Copy
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
+                Please include your phone number in the transfer narration/reference when making the payment. This helps us match your payment to your registration.
               </AlertDescription>
             </Alert>
 
@@ -285,7 +245,7 @@ export default function PaymentPage() {
                 type="file" 
                 accept="image/jpeg,image/png,image/jpg,application/pdf" 
                 onChange={handleFileChange}
-                disabled={uploadingProof || isLoadingReference}
+                disabled={uploadingProof}
                 className={uploadingProof ? "opacity-50 cursor-not-allowed" : ""}
               />
               <p className="text-sm text-muted-foreground">

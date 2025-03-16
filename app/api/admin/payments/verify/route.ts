@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withTransaction } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
+import { query, withTransaction } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 
 export async function POST(request: NextRequest) {
@@ -24,42 +24,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { reference } = await request.json()
+    const { phone } = await request.json()
     
-    if (!reference) {
+    if (!phone) {
       return NextResponse.json(
-        { error: 'Payment reference is required' },
+        { error: 'Phone number is required' },
         { status: 400 }
       )
     }
 
     return await withTransaction(async (client) => {
-      // Update payment status to completed
+      // Get the user profile 
       const result = await client.query(
-        `UPDATE profiles 
-         SET payment_status = 'completed',
-             payment_date = NOW(),
-             updated_at = NOW()
-         WHERE payment_reference = $1
-         RETURNING id`,
-        [reference]
+        'SELECT p.* FROM profiles p JOIN users u ON p.id = u.id WHERE u.phone = $1',
+        [phone]
       )
 
-      if (result.rowCount === 0) {
+      if (result.rows.length === 0) {
         return NextResponse.json(
           { error: 'Payment not found' },
           { status: 404 }
         )
       }
 
+      // Update payment status
+      await client.query(
+        `UPDATE profiles p
+         SET payment_status = 'completed',
+             updated_at = NOW()
+         FROM users u
+         WHERE p.id = u.id AND u.phone = $1`,
+        [phone]
+      )
+
       revalidatePath('/admin/payments')
       revalidatePath('/participant/dashboard')
+
       return NextResponse.json({ success: true })
     })
   } catch (error: any) {
-    console.error('Error verifying payment:', error)
+    console.error('Payment verification error:', error)
     return NextResponse.json(
-      { error: 'Failed to verify payment' },
+      { error: error.message || 'Failed to verify payment' },
       { status: 500 }
     )
   }
