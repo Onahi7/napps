@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useTransition } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,16 +21,24 @@ interface PaymentProps {
 }
 
 export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: PaymentProps) {
+  const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
   const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text)
-    toast({
-      description: "Payment reference copied to clipboard",
-    })
+    try {
+      await navigator.clipboard.writeText(text)
+      toast({
+        description: "Text copied to clipboard",
+      })
+    } catch (error) {
+      toast({
+        description: "Failed to copy text",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +55,7 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
         description: "Please upload an image (JPG/PNG) or PDF",
         variant: "destructive",
       })
-      event.target.value = '' // Clear the input
+      event.target.value = ''
       setSelectedFile(null)
       return
     }
@@ -58,7 +66,7 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
         description: "Maximum file size is 5MB",
         variant: "destructive",
       })
-      event.target.value = '' // Clear the input
+      event.target.value = ''
       setSelectedFile(null)
       return
     }
@@ -67,46 +75,55 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
   }
 
   const handleProofUpload = async () => {
-    if (!selectedFile || uploading) return;
+    if (!selectedFile || uploading) return
 
-    setUploading(true);
+    setUploading(true)
 
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
+      const formData = new FormData()
+      formData.append('file', selectedFile)
 
-      const result = await uploadPaymentProof(formData);
-      
-      if (!result.success) {
-        throw new Error('Upload failed');
-      }
+      startTransition(async () => {
+        try {
+          const result = await uploadPaymentProof(formData)
+          
+          if (!result.success) {
+            throw new Error('Upload failed')
+          }
 
-      toast({
-        variant: "default",
-        title: "Success",
-        description: "Payment proof uploaded successfully",
-      });
-      
-      // Reset the form
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+          toast({
+            title: "Success",
+            description: "Payment proof uploaded successfully",
+          })
+          
+          // Reset the form
+          setSelectedFile(null)
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+          }
 
-      // Refresh the page after successful upload
-      window.location.reload();
-
+          // Use window.location.reload() instead of router.refresh() for a full reload
+          window.location.reload()
+        } catch (error: any) {
+          console.error('Error in transition:', error)
+          toast({
+            title: "Error",
+            description: error.message || "Failed to upload payment proof",
+            variant: "destructive",
+          })
+        }
+      })
     } catch (error: any) {
-      console.error('Error uploading proof:', error);
+      console.error('Error uploading proof:', error)
       toast({
-        variant: "destructive",
         title: "Error",
         description: error.message || "Failed to upload payment proof",
-      });
+        variant: "destructive",
+      })
     } finally {
-      setUploading(false);
+      setUploading(false)
     }
-  };
+  }
 
   if (status === 'completed') {
     return (
@@ -192,7 +209,7 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
               <div className="space-y-2">
                 <h3 className="font-medium">Important</h3>
-                <p className="text-sm text-muted-foreground">Please include your phone number in the transfer narration/reference when making the payment. This helps us match your payment to your registration.</p>
+                <p className="text-sm text-muted-foreground">Please include your phone number ({phoneNumber}) in the transfer narration/reference when making the payment. This helps us match your payment to your registration.</p>
               </div>
             </div>
           </TabsContent>
@@ -205,8 +222,8 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
                 type="file"
                 accept="image/jpeg,image/png,image/jpg,application/pdf"
                 onChange={handleFileChange}
-                disabled={uploading}
-                className={uploading ? "opacity-50 cursor-not-allowed" : ""}
+                disabled={uploading || isPending}
+                className={uploading || isPending ? "opacity-50 cursor-not-allowed" : ""}
                 ref={fileInputRef}
               />
               <p className="text-sm text-muted-foreground">
@@ -216,10 +233,10 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
             <Button 
               onClick={handleProofUpload}
-              disabled={uploading || !selectedFile}
+              disabled={uploading || isPending || !selectedFile}
               className="w-full relative"
             >
-              {uploading ? (
+              {(uploading || isPending) ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin absolute left-4" />
                   <span className="pl-6">Uploading...</span>
