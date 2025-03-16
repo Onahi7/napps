@@ -37,13 +37,22 @@ export default function PaymentPage() {
         setRegistrationAmount(amount);
         
         // Initialize payment if no reference exists
-        const ref = searchParams.get('reference');
-        if (!ref) {
-          const result = await initializePayment(amount);
-          setPaymentReference(result.reference);
-        } else {
-          setPaymentReference(ref);
-        }
+        const checkPaymentReference = async () => {
+          if (searchParams) {
+            const ref = searchParams.get('reference');
+            if (!ref) {
+              const result = await initializePayment(amount);
+              setPaymentReference(result.reference);
+            } else {
+              setPaymentReference(ref);
+            }
+          } else {
+            const result = await initializePayment(amount);
+            setPaymentReference(result.reference);
+          }
+        };
+
+        checkPaymentReference();
       } catch (error) {
         console.error('Error:', error);
         setRegistrationAmount(20000);
