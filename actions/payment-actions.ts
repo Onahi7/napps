@@ -11,36 +11,60 @@ export async function initializePayment(amount: number) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  try {
-    const profile = await query(
-      'SELECT payment_status, payment_reference FROM profiles WHERE id = $1',
-      [session.user.id]
-    )
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      // First check if database is responding
+      await query('SELECT 1');
+      
+      const profile = await query(
+        'SELECT payment_status, payment_reference FROM profiles WHERE id = $1',
+        [session.user.id]
+      )
 
-    if (profile.rows[0]?.payment_status === 'completed') {
-      throw new Error('Payment already completed')
+      if (profile.rows[0]?.payment_status === 'completed') {
+        throw new Error('Payment already completed')
+      }
+
+      // Generate new reference if none exists
+      const paymentReference = profile.rows[0]?.payment_reference || 
+        `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      
+      await query(
+        `UPDATE profiles 
+         SET payment_reference = $1, 
+             payment_amount = $2,
+             payment_status = 'pending',
+             payment_proof = NULL,
+             updated_at = NOW()
+         WHERE id = $3`,
+        [paymentReference, amount, session.user.id]
+      )
+
+      return { reference: paymentReference }
+    } catch (error: any) {
+      retries--;
+      console.error(`Payment initialization error (attempts left: ${retries}):`, error)
+      
+      // Check if error is retryable (connection issues)
+      const retryableError = 
+        error.message?.includes('connection') || 
+        error.message?.includes('timeout') ||
+        error.message?.includes('Connection terminated');
+        
+      if (!retryableError || retries === 0) {
+        if (error.message?.includes('connection') || error.message?.includes('timeout')) {
+          throw new Error('Database connection issue. Please try again in a few moments.')
+        }
+        throw error;
+      }
+      
+      // Wait before retrying with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, 3-retries), 8000)));
     }
-
-    // Generate new reference if none exists
-    const paymentReference = profile.rows[0]?.payment_reference || 
-      `NAPPS-${Date.now()}-${Math.random().toString(36).substring(7)}`
-    
-    await query(
-      `UPDATE profiles 
-       SET payment_reference = $1, 
-           payment_amount = $2,
-           payment_status = 'pending',
-           payment_proof = NULL,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [paymentReference, amount, session.user.id]
-    )
-
-    return { reference: paymentReference }
-  } catch (error: any) {
-    console.error('Payment initialization error:', error)
-    throw error
   }
+  
+  throw new Error('Failed to initialize payment after retries')
 }
 
 export async function uploadPaymentProof(formData: FormData) {
