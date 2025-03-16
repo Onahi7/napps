@@ -114,11 +114,7 @@ export default function PaymentPage() {
     setError(null);
 
     try {
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', paymentProofFile);
-      
-      const result = await uploadPaymentProof(formData);
+      const result = await uploadPaymentProof(paymentProofFile);
       
       if (!result?.success) {
         throw new Error('Upload failed');
