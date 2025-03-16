@@ -80,18 +80,51 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
     setUploading(true)
 
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-
-      const response = await fetch('/api/upload-proof', {
+      // Get presigned URL
+      const presignedResponse = await fetch('/api/presigned-url', {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileType: selectedFile.type,
+        }),
       })
 
-      const data = await response.json()
+      if (!presignedResponse.ok) {
+        const error = await presignedResponse.json()
+        throw new Error(error.error || 'Failed to get upload URL')
+      }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload payment proof')
+      const { presignedUrl, fileUrl } = await presignedResponse.json()
+
+      // Upload directly to DigitalOcean Spaces
+      const uploadResponse = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: selectedFile,
+        headers: {
+          'Content-Type': selectedFile.type,
+        },
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file')
+      }
+
+      // Update profile with new proof URL
+      const updateResponse = await fetch('/api/payment-proof', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileUrl,
+        }),
+      })
+
+      if (!updateResponse.ok) {
+        const error = await updateResponse.json()
+        throw new Error(error.error || 'Failed to save payment proof')
       }
 
       toast({
@@ -167,7 +200,7 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
                   className="object-contain bg-secondary"
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;
-                    img.src = '/images/error-image.png'; // Add a fallback error image
+                    img.src = '/images/error-image.png'
                   }}
                 />
               )}
