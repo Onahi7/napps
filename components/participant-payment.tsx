@@ -83,36 +83,30 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      startTransition(async () => {
-        try {
-          const result = await uploadPaymentProof(formData)
-          
-          if (!result.success) {
-            throw new Error('Upload failed')
-          }
-
-          toast({
-            title: "Success",
-            description: "Payment proof uploaded successfully",
-          })
-          
-          // Reset the form
-          setSelectedFile(null)
-          if (fileInputRef.current) {
-            fileInputRef.current.value = ''
-          }
-
-          // Use window.location.reload() instead of router.refresh() for a full reload
-          window.location.reload()
-        } catch (error: any) {
-          console.error('Error in transition:', error)
-          toast({
-            title: "Error",
-            description: error.message || "Failed to upload payment proof",
-            variant: "destructive",
-          })
-        }
+      const response = await fetch('/api/upload-proof', {
+        method: 'POST',
+        body: formData
       })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload payment proof')
+      }
+
+      toast({
+        title: "Success",
+        description: "Payment proof uploaded successfully",
+      })
+      
+      // Reset the form
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+
+      // Use window.location.reload() instead of router.refresh() for a full reload
+      window.location.reload()
     } catch (error: any) {
       console.error('Error uploading proof:', error)
       toast({

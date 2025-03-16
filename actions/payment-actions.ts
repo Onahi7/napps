@@ -58,7 +58,11 @@ export async function uploadPaymentProof(formData: FormData) {
       throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF')
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
+    // Convert File to Buffer using Blob and arrayBuffer
+    const blob = new Blob([file])
+    const arrayBuffer = await blob.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
     if (buffer.length > 5 * 1024 * 1024) {
       throw new Error('File size too large. Maximum size is 5MB')
     }
