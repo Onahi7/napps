@@ -9,15 +9,15 @@ process.env.NODE_PG_FORCE_NATIVE = 'false'
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   ssl: env.DATABASE_SSL ? {
-    rejectUnauthorized: false,  // Always allow self-signed certificates
-    checkServerIdentity: () => undefined  // Skip hostname check
+    rejectUnauthorized: false,  // Allow self-signed certs for DigitalOcean managed database
+    checkServerIdentity: () => undefined // Skip hostname checks
   } : false,
-  // Improved connection settings for more reliable connections
-  max: 15,                          // Increased from 10 to handle more concurrent requests
-  idleTimeoutMillis: 60000,         // Increased from 30s to 60s
-  connectionTimeoutMillis: 10000,   // Increased from 2s to 10s
-  statement_timeout: 60000,         // Increased from 30s to 60s
-  query_timeout: 30000,             // Increased from 5s to 30s
+  // Improved connection settings for DigitalOcean managed database
+  max: 15,                          // Maximum number of clients
+  idleTimeoutMillis: 60000,         // 1 minute idle timeout
+  connectionTimeoutMillis: 10000,   // 10 second connection timeout
+  statement_timeout: 60000,         // 1 minute statement timeout
+  query_timeout: 30000,             // 30 second query timeout
   application_name: 'napps_summit',
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000

@@ -8,10 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Icons } from "@/components/icons"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { useAuth } from "@/components/auth-provider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getNigeriaStates } from "@/lib/nigeria-data"
-import { initializePayment } from "@/actions/payment-actions"
 import { Loader2 } from "lucide-react"
 
 type ValidationErrors = {
@@ -20,15 +18,14 @@ type ValidationErrors = {
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
-  const [registrationAmount] = useState(15000) // This will be fetched from config in production
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
     phone: "",
     school_name: "",
+    school_address: "",
     school_state: "",
     napps_chapter: ""
   })
@@ -36,7 +33,6 @@ export default function RegisterPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
-    // Clear error when user types
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }))
     }
@@ -44,7 +40,6 @@ export default function RegisterPage() {
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }))
-    // Clear error when user makes a selection
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }))
     }
@@ -62,7 +57,6 @@ export default function RegisterPage() {
     if (!formData.email.trim()) {
       newErrors.email = "Email is required"
     } else {
-      // Simple email validation - just check for @ and .
       const emailParts = formData.email.split('@');
       if (emailParts.length !== 2 || !emailParts[1].includes('.')) {
         newErrors.email = "Please enter a valid email address"
@@ -72,7 +66,6 @@ export default function RegisterPage() {
     if (!formData.phone.trim()) {
       newErrors.phone = "Phone number is required"
     } else {
-      // Validate phone format: Allow any format, but ensure we have enough digits
       const digitsOnly = formData.phone.replace(/\D/g, '')
       if (digitsOnly.length < 10 || digitsOnly.length > 15) {
         newErrors.phone = "Phone number should have 10-15 digits"
@@ -105,75 +98,59 @@ export default function RegisterPage() {
     
     setIsLoading(true)
     try {
-      // Remove ALL non-digit characters from phone number
       const cleanedPhone = formData.phone.replace(/\D/g, '')
       
-      // Log the data being sent to help debug
-      console.log("Sending registration data:", {
-        email: formData.email,
-        phone: cleanedPhone,
-        full_name: formData.full_name.trim(),
-        password: "NAPPS2025",
-        // Matching the expected field names on the server:
-        organization: formData.school_name,
-        state: formData.school_state,
-        chapter: formData.napps_chapter
-      })
-
-      // Make a direct API call to see detailed errors
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: formData.email,
-          phone: cleanedPhone,
-          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
           password: "NAPPS2025",
-          organization: formData.school_name,
-          state: formData.school_state,
-          chapter: formData.napps_chapter
+          full_name: formData.full_name.trim(),
+          phone: cleanedPhone,
+          school_name: formData.school_name.trim(),
+          school_address: formData.school_address.trim(),
+          school_state: formData.school_state,
+          napps_chapter: formData.napps_chapter.trim()
         }),
       })
       
       const data = await response.json()
       
       if (!response.ok) {
-        console.error("Registration API error:", data)
-        
-        // Handle database connection errors specifically
-        if (data.message && data.message.includes("Connection terminated")) {
-          setErrors({ 
-            submit: "Unable to connect to the registration server. Please try again later or contact support." 
-          })
-          return
+        switch (response.status) {
+          case 409: // Conflict - duplicate entry
+            setErrors({ submit: data.error });
+            break;
+          case 503: // Service Unavailable
+            setErrors({ 
+              submit: "Registration system is temporarily unavailable. Please try again in a few minutes." 
+            });
+            break;
+          case 400: // Validation errors
+            if (data.details) {
+              const fieldErrors: ValidationErrors = {};
+              data.details.forEach((issue: any) => {
+                const field = issue.path[0];
+                fieldErrors[field] = issue.message;
+              });
+              setErrors(fieldErrors);
+            } else {
+              setErrors({ submit: data.error || "Please check your form entries" });
+            }
+            break;
+          default:
+            setErrors({ 
+              submit: data.error || "Registration failed. Please try again or contact support." 
+            });
         }
-        
-        // Show specific error message from the server if available
-        if (data.error) {
-          setErrors({ submit: data.error })
-        } else if (data.details) {
-          // Show the specific validation errors from Zod
-          const fieldErrors: ValidationErrors = {}
-          data.details.forEach((issue: any) => {
-            const path = issue.path[0]
-            // Map server field names back to client field names if needed
-            const clientFieldName = path === 'organization' ? 'school_name' : 
-                                   path === 'state' ? 'school_state' :
-                                   path === 'chapter' ? 'napps_chapter' : path
-            fieldErrors[clientFieldName] = issue.message
-          })
-          setErrors({...fieldErrors, submit: "Please fix the errors in the form"})
-        } else {
-          setErrors({ submit: "Registration failed. Please try again." })
-        }
-        return
+        return;
       }
       
-      // Successfully registered
-      // Directly redirect to payment page
-      router.push('/payment')
+      // Successfully registered - redirect to registration success
+      router.push('/registration-success')
       
     } catch (error: any) {
       console.error("Registration error:", error)
@@ -190,6 +167,7 @@ export default function RegisterPage() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
+
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[600px]">
         <div className="flex flex-col space-y-2 text-center">
           <Icons.logo className="mx-auto h-12 w-12 text-napps-gold" />
@@ -197,7 +175,7 @@ export default function RegisterPage() {
           <p className="text-sm text-muted-foreground">Enter your details to register for the summit</p>
         </div>
 
-        <Card className="border-napps-gold/30 card-glow">
+        <Card className="border-napps-gold/30">
           <form onSubmit={handleSubmit}>
             <CardHeader>
               <CardTitle className="text-xl">Quick Registration</CardTitle>
@@ -274,7 +252,7 @@ export default function RegisterPage() {
                   <Input
                     id="school_name"
                     name="school_name"
-                    placeholder="Example International School"
+                    placeholder="ABC International School"
                     value={formData.school_name}
                     onChange={handleChange}
                     className={`border-napps-gold/30 focus-visible:ring-napps-gold ${
@@ -287,15 +265,29 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="school_address">School Address</Label>
+                  <Input
+                    id="school_address"
+                    name="school_address"
+                    placeholder="School Address"
+                    value={formData.school_address}
+                    onChange={handleChange}
+                    className="border-napps-gold/30 focus-visible:ring-napps-gold"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="school_state">School State</Label>
                   <Select
-                    name="school_state"
                     value={formData.school_state}
                     onValueChange={(value) => handleSelectChange("school_state", value)}
                   >
-                    <SelectTrigger className={`border-napps-gold/30 focus-visible:ring-napps-gold ${
-                      errors.school_state ? "border-destructive" : ""
-                    }`}>
+                    <SelectTrigger
+                      id="school_state"
+                      className={`border-napps-gold/30 focus-visible:ring-napps-gold ${
+                        errors.school_state ? "border-destructive" : ""
+                      }`}
+                    >
                       <SelectValue placeholder="Select state" />
                     </SelectTrigger>
                     <SelectContent>
@@ -328,14 +320,13 @@ export default function RegisterPage() {
                   )}
                 </div>
               </div>
-              
-              {/* Payment Information */}
+
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Payment Information</h3>
                 <div className="rounded-md bg-muted p-4">
                   <div className="flex items-center justify-between">
                     <span>Registration Fee:</span>
-                    <span className="text-xl font-bold">₦{20000}</span>
+                    <span className="text-xl font-bold">₦20,000</span>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     After registration, you will receive bank transfer details and a unique payment reference code.

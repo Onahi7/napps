@@ -1,5 +1,4 @@
 "use client"
-
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +27,7 @@ export default function PaymentPage() {
   const [uploadingProof, setUploadingProof] = useState(false);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -51,9 +51,10 @@ export default function PaymentPage() {
         setLoadingConfig(false);
       }
     };
-
-    fetchConfig();
-  }, [searchParams]);
+    if (session?.user) {
+      fetchConfig();
+    }
+  }, [searchParams, session]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -72,26 +73,32 @@ export default function PaymentPage() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
+      
       // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
       if (!allowedTypes.includes(file.type)) {
+        setError("Please upload an image (JPEG, PNG) or PDF");
         toast({
           title: "Invalid file type",
           description: "Please upload an image (JPEG, PNG) or PDF",
           variant: "destructive"
         });
+        e.target.value = '';
         return;
       }
 
       // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
+        setError("File size must be less than 5MB");
         toast({
           title: "File too large",
           description: "Maximum file size is 5MB",
           variant: "destructive"
         });
+        e.target.value = '';
         return;
       }
 
@@ -100,34 +107,65 @@ export default function PaymentPage() {
   };
 
   const handleProofUpload = async () => {
-    if (!paymentProofFile || !paymentReference) return;
+    if (!paymentProofFile || !paymentReference) {
+      toast({
+        title: "Error",
+        description: "Please select a file and ensure you have a payment reference",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setUploadingProof(true);
+    setError(null);
+
     try {
       // Create form data
       const formData = new FormData();
       formData.append('file', paymentProofFile);
       formData.append('reference', paymentReference);
       
-      // Upload proof directly using the server action
-      await uploadPaymentProof(formData);
+      const result = await uploadPaymentProof(formData);
       
+      if (!result?.success) {
+        throw new Error('Upload failed');
+      }
+
       toast({
         title: "Success",
-        description: "Payment proof uploaded successfully"
+        description: "Payment proof uploaded successfully. Please wait for admin verification."
       });
       
-      router.push("/participant/dashboard");
+      // Clear file input and state
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      setPaymentProofFile(null);
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        router.refresh();
+        router.push("/participant/dashboard");
+      }, 2000);
+
     } catch (error: any) {
       console.error("Error uploading proof:", error);
+      setError(error.message || "Failed to upload payment proof");
       toast({
         title: "Error",
-        description: error.message || "Failed to upload payment proof",
+        description: error.message || "Failed to upload payment proof. Please try again.",
         variant: "destructive"
       });
     } finally {
       setUploadingProof(false);
     }
   };
+
+  // Protect the route
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
 
   if (status === 'loading' || loadingConfig) {
     return (
@@ -138,14 +176,12 @@ export default function PaymentPage() {
   }
 
   if (!session) {
-    router.push('/login');
     return null;
   }
 
   return (
     <div className="container mx-auto p-4 py-8">
       <h1 className="mb-8 text-3xl font-bold">Payment Details</h1>
-
       <div className="mx-auto max-w-md">
         <Card>
           <CardHeader>
@@ -153,13 +189,18 @@ export default function PaymentPage() {
             <CardDescription>Please transfer the exact amount and use your reference code in the transfer narration</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {error && (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
             <div className="rounded-md bg-muted p-4">
               <div className="flex items-center justify-between">
                 <span>Registration Fee:</span>
                 <span className="text-xl font-bold">₦{registrationAmount?.toLocaleString()}</span>
               </div>
             </div>
-
+            
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -207,8 +248,10 @@ export default function PaymentPage() {
               <Label>Upload Payment Proof</Label>
               <Input 
                 type="file" 
-                accept="image/*,application/pdf" 
+                accept="image/jpeg,image/png,image/jpg,application/pdf" 
                 onChange={handleFileChange}
+                disabled={uploadingProof}
+                className={uploadingProof ? "opacity-50 cursor-not-allowed" : ""}
               />
               <p className="text-sm text-muted-foreground">
                 Upload a screenshot or PDF of your payment proof (Max 5MB)

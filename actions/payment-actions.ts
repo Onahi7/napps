@@ -42,18 +42,21 @@ export async function initializePayment(amount: number) {
 }
 
 export async function uploadPaymentProof(formData: FormData) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) throw new Error('Unauthorized')
-
+  console.log('Starting payment proof upload...');
+  
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      console.error('Upload failed: Unauthorized - No session');
+      throw new Error('Unauthorized');
+    }
+
     const file = formData.get('file') as File;
     const reference = formData.get('reference') as string;
 
-    if (!file) {
-      throw new Error('No file provided');
-    }
-    if (!reference) {
-      throw new Error('No payment reference provided');
+    if (!file || !reference) {
+      console.error('Upload failed: Missing file or reference');
+      throw new Error('Missing required fields');
     }
 
     // Validate payment reference exists and belongs to user
@@ -63,32 +66,36 @@ export async function uploadPaymentProof(formData: FormData) {
     );
 
     if (payment.rowCount === 0) {
+      console.error('Upload failed: Invalid payment reference');
       throw new Error('Invalid payment reference');
     }
 
     if (payment.rows[0].payment_status === 'completed') {
+      console.error('Upload failed: Payment already completed');
       throw new Error('Payment already completed');
     }
 
+    console.log('Validating file...');
     const buffer = Buffer.from(await file.arrayBuffer());
-    const maxSize = 5 * 1024 * 1024; // 5MB
-
-    if (file.size > maxSize) {
+    
+    if (buffer.length > 5 * 1024 * 1024) {
       throw new Error('File size too large. Maximum size is 5MB');
     }
 
-    if (!['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)) {
+    if (!['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(file.type)) {
       throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF');
     }
 
-    const fileName = `payment-proofs/${session.user.id}-${Date.now()}-${file.name}`;
-    const storage = StorageService.getInstance();
+    const fileName = `payment-proofs/${session.user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    console.log('Uploading to storage...', fileName);
     
-    try {
-      const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
-      
-      // Update the database with the proof URL and status
-      await query(
+    const storage = StorageService.getInstance();
+    const fileUrl = await storage.uploadFile(buffer, fileName, file.type);
+    console.log('File uploaded successfully to:', fileUrl);
+
+    // Update database within a transaction
+    await withTransaction(async (client) => {
+      await client.query(
         `UPDATE profiles 
          SET payment_proof = $1,
              payment_status = 'proof_submitted',
@@ -96,20 +103,17 @@ export async function uploadPaymentProof(formData: FormData) {
          WHERE id = $2 AND payment_reference = $3`,
         [fileUrl, session.user.id, reference]
       );
+    });
 
-      revalidatePath('/payment');
-      revalidatePath('/participant/dashboard');
-      revalidatePath('/admin/payments');
+    console.log('Database updated successfully');
+    revalidatePath('/payment');
+    revalidatePath('/participant/dashboard');
+    revalidatePath('/admin/payments');
 
-      return { success: true, fileUrl };
-    } catch (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      throw new Error('Failed to upload file to storage');
-    }
-
+    return { success: true, fileUrl };
   } catch (error: any) {
-    console.error('Error uploading payment proof:', error);
-    throw error;
+    console.error('Payment proof upload error:', error);
+    throw new Error(error.message || 'Failed to upload payment proof');
   }
 }
 

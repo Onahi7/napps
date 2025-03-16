@@ -41,7 +41,13 @@ const nextConfig = {
         }
       ]
     }
-  ]
+  ],
+  // Handle larger file uploads
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '6mb' // Slightly larger than our 5MB limit to account for encoding overhead
+    }
+  }
 }
 
 export default nextConfig

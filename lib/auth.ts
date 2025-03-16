@@ -3,6 +3,7 @@
 import { query } from './db'
 import { compare, hash } from 'bcrypt'
 import { z } from 'zod'
+import { generateParticipantReference } from '@/lib/utils/reference-generator';
 
 export interface Profile {
   id: string
@@ -68,17 +69,18 @@ export async function createUser(userData: z.infer<typeof registrationSchema>) {
       )
 
       const userId = result.rows[0].id
+      const referenceCode = generateParticipantReference();
 
-      // Insert profile
+      // Insert profile with reference
       await query(
         `INSERT INTO profiles (
-          id, email, full_name, phone, role, school_name, 
-          school_address, school_state, napps_chapter,
+          id, email, full_name, phone, role, reference_code,
+          school_name, school_address, school_state, napps_chapter,
           created_at, updated_at
         )
         VALUES (
           $1, $2, $3, $4, 'participant', $5, 
-          $6, $7, $8,
+          $6, $7, $8, $9,
           NOW(), NOW()
         )`,
         [
@@ -86,6 +88,7 @@ export async function createUser(userData: z.infer<typeof registrationSchema>) {
           validatedData.email, 
           validatedData.full_name, 
           validatedData.phone,
+          referenceCode,
           validatedData.school_name,
           validatedData.school_address,
           validatedData.school_state,
