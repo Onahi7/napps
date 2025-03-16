@@ -13,12 +13,12 @@ export const pool = new Pool({
     checkServerIdentity: () => undefined
   } : false,
   // Connection pool settings optimized for Digital Ocean managed database
-  max: 20,                          // Increased for Digital Ocean managed DB
-  min: 3,                           // Increased minimum connections
-  idleTimeoutMillis: 60000,         // Increased to 60 seconds
-  connectionTimeoutMillis: 15000,   // Increased to 15 seconds
-  statement_timeout: 60000,         // Increased to 60 seconds
-  query_timeout: 30000,             // Increased to 30 seconds
+  max: 10,                          // Reduced from 20 to prevent overloading the connection pool
+  min: 2,                           // Reduced minimum connections to be more conservative
+  idleTimeoutMillis: 30000,         // Reduced to 30 seconds
+  connectionTimeoutMillis: 10000,   // Reduced to 10 seconds
+  statement_timeout: 30000,         // Reduced to 30 seconds
+  query_timeout: 20000,             // Reduced to 20 seconds 
   application_name: 'napps_summit',
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000
@@ -86,13 +86,16 @@ export async function query(text: string, params?: any[], retries = 3) {
       const retryableError = 
         error.message.includes('connection') || 
         error.message.includes('timeout') ||
-        error.message.includes('Connection terminated');
+        error.message.includes('Connection terminated') ||
+        error.message.includes('too many clients');  // Added check for connection pool limit
         
       if (!retryableError || attempt >= retries - 1) {
         throw error;
       }
       
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Exponential backoff for retries
+      const backoffDelay = Math.min(1000 * Math.pow(2, attempt), 8000);
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
   }
   
@@ -107,7 +110,19 @@ export async function withTransaction<T>(
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt < retries; attempt++) {
-    const client = await getClient();
+    let client;
+    try {
+      client = await getClient();
+    } catch (err) {
+      console.error(`Failed to get client for transaction attempt ${attempt + 1}/${retries}:`, err);
+      lastError = err as Error;
+      // Exponential backoff before retrying
+      if (attempt < retries - 1) {
+        const backoffDelay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      }
+      continue; // Skip to next retry attempt
+    }
     
     try {
       await client.query('BEGIN');
@@ -126,16 +141,19 @@ export async function withTransaction<T>(
       const retryableError = 
         errorMessage.includes('connection') || 
         errorMessage.includes('timeout') ||
-        errorMessage.includes('Connection terminated');
+        errorMessage.includes('Connection terminated') ||
+        errorMessage.includes('too many clients');  // Added check for connection pool limit
         
       if (!retryableError || attempt >= retries - 1) {
         throw lastError;
       }
       
       console.log(`Retrying transaction after error: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Exponential backoff before retrying
+      const backoffDelay = Math.min(1000 * Math.pow(2, attempt), 8000);
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
     } finally {
-      client.release();
+      client?.release();
     }
   }
   

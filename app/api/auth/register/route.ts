@@ -12,6 +12,9 @@ interface DatabaseError extends Error {
   code?: string;
   constraint?: string;
   detail?: string;
+  table?: string;  // Added to capture table name
+  column?: string; // Added to capture column name
+  schema?: string; // Added to capture schema information
 }
 
 // Registration schema matching database structure
@@ -39,9 +42,14 @@ export async function POST(req: NextRequest) {
   console.log('Starting registration process...');
   
   try {
-    // Test database connection first
+    // Test database connection first with timeout
     try {
-      await query('SELECT 1');
+      const connectionTestPromise = query('SELECT 1');
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database connection test timed out')), 5000)
+      );
+      
+      await Promise.race([connectionTestPromise, timeoutPromise]);
       console.log('Database connection test successful');
     } catch (err) {
       console.error('Database connection test failed:', err);
@@ -142,12 +150,20 @@ export async function POST(req: NextRequest) {
         // Generate a unique_id for the profile
         const uniqueId = `NAPPS-${Math.random().toString(36).substring(2, 10)}`;
         
-        // Create profile with reference code - use both old and new schema columns
+        // Let's query the profiles table constraints to verify the allowed values
+        const checkConstraints = await client.query(`
+          SELECT conname, pg_get_constraintdef(oid) 
+          FROM pg_constraint 
+          WHERE conrelid = 'profiles'::regclass AND contype = 'c'
+        `);
+        console.log('Profile table constraints:', checkConstraints.rows);
+        
+        // Create profile with payment reference code
         console.log('Creating profile record');
         await client.query(
           `INSERT INTO profiles (
             id, email, full_name, phone,
-            reference_code, role, payment_status, accreditation_status,
+            payment_reference, role, payment_status, accreditation_status,
             state, chapter, organization,
             school_name, school_address, school_state, napps_chapter,
             unique_id, created_at, updated_at
@@ -160,8 +176,8 @@ export async function POST(req: NextRequest) {
             data.phone,
             referenceCode,
             'participant',
-            'pending',
-            'pending',
+            'pending',  // This must match the database constraint
+            'pending',  // This must match the database constraint
             data.school_state,
             data.napps_chapter,
             data.school_name,
@@ -181,7 +197,10 @@ export async function POST(req: NextRequest) {
           message: dbError.message,
           code: dbError.code,
           constraint: dbError.constraint,
-          detail: dbError.detail
+          detail: dbError.detail,
+          table: dbError.table,
+          column: dbError.column,
+          schema: dbError.schema
         });
         throw err;
       }
@@ -201,6 +220,9 @@ export async function POST(req: NextRequest) {
       code: dbError.code, 
       constraint: dbError?.constraint,
       detail: dbError?.detail,
+      table: dbError?.table,
+      column: dbError?.column,
+      schema: dbError?.schema,
       stack: process.env.NODE_ENV === 'development' ? dbError.stack : undefined
     });
 
@@ -238,6 +260,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         error: 'Invalid data relationship. Please try again or contact support.'
+      }, { status: 400 });
+    }
+    
+    // Handle check constraint violations
+    if (dbError.code === '23514') { // Check constraint violation
+      console.error('Check constraint violation:', dbError);
+      return NextResponse.json({
+        success: false,
+        error: 'Data validation failed on the server. Please check your inputs and try again.',
+        detail: dbError.detail
       }, { status: 400 });
     }
 

@@ -5,11 +5,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Copy, Upload } from "lucide-react"
+import { Loader2, Copy, Upload, AlertCircle } from "lucide-react"
 import { useSession } from 'next-auth/react'
 import { getConfig } from '@/lib/config-service'
-import { uploadPaymentProof, initializePayment } from "@/actions/payment-actions"
+import { uploadPaymentProof, initializePayment, getPaymentStatus } from "@/actions/payment-actions"
 import { useToast } from "@/hooks/use-toast"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 const BANK_DETAILS = {
   bankName: "Unity Bank",
@@ -36,23 +37,28 @@ export default function PaymentPage() {
         const amount = config ? Number.parseFloat(config) : 10000;
         setRegistrationAmount(amount);
         
+        // First try to get existing payment reference from the database
+        const paymentStatus = await getPaymentStatus();
+        
         // Initialize payment if no reference exists
-        const checkPaymentReference = async () => {
-          if (searchParams) {
-            const ref = searchParams.get('reference');
-            if (!ref) {
-              const result = await initializePayment(amount);
-              setPaymentReference(result.reference);
-            } else {
-              setPaymentReference(ref);
-            }
+        if (searchParams) {
+          const ref = searchParams.get('reference');
+          if (ref) {
+            setPaymentReference(ref);
+          } else if (paymentStatus?.payment_reference) {
+            // Use existing reference from database if available
+            setPaymentReference(paymentStatus.payment_reference);
           } else {
+            // Create new reference if none exists
             const result = await initializePayment(amount);
             setPaymentReference(result.reference);
           }
-        };
-
-        checkPaymentReference();
+        } else if (paymentStatus?.payment_reference) {
+          setPaymentReference(paymentStatus.payment_reference);
+        } else {
+          const result = await initializePayment(amount);
+          setPaymentReference(result.reference);
+        }
       } catch (error) {
         console.error('Error:', error);
         setRegistrationAmount(20000);
@@ -240,18 +246,25 @@ export default function PaymentPage() {
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-
-              <div className="space-y-2">
-                <Label>Your Payment Reference (add to transfer narration)</Label>
-                <p className="text-lg font-medium text-primary">{paymentReference}</p>
-                {paymentReference && (
-                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(paymentReference)}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy Reference
-                  </Button>
-                )}
-              </div>
             </div>
+
+            {/* Payment Reference Section - Highlighted */}
+            <Alert className="border-2 border-primary/50 bg-primary/5">
+              <AlertCircle className="h-5 w-5 text-primary" />
+              <AlertTitle className="text-primary">Payment Reference</AlertTitle>
+              <AlertDescription className="mt-2">
+                <span className="font-semibold text-muted-foreground">IMPORTANT: Include this reference in your transfer narration</span>
+                <div className="mt-2 flex items-center justify-between rounded-md bg-background p-3">
+                  <span className="text-lg font-bold text-primary">{paymentReference || "Loading..."}</span>
+                  {paymentReference && (
+                    <Button variant="outline" size="sm" onClick={() => copyToClipboard(paymentReference)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </Button>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
 
             <div className="space-y-2">
               <Label>Upload Payment Proof</Label>
