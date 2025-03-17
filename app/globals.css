@@ -175,3 +175,21 @@
   background: linear-gradient(90deg, transparent, theme("colors.napps.gold"), transparent);
 }
 
+.important-alert {
+  @apply border-2 border-napps-gold bg-napps-gold/10 text-foreground;
+}
+
+.important-alert .alert-title {
+  @apply text-lg font-extrabold tracking-tight text-napps-gold;
+}
+
+.important-alert .alert-description {
+  @apply font-semibold text-base;
+}
+
+.whatsapp-bold {
+  font-weight: 800;
+  color: theme("colors.napps.gold");
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+

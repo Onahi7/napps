@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { Loader2, CheckCircle2, Copy, AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
@@ -154,29 +154,30 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
             </div>
           </div>
 
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Please include your phone number ({phoneNumber}) in the transfer narration/reference
+          <Alert className="important-alert">
+            <AlertCircle className="h-4 w-4 text-napps-gold" />
+            <AlertTitle className="alert-title">Important</AlertTitle>
+            <AlertDescription className="alert-description">
+              Please include your phone number (<span className="whatsapp-bold">{phoneNumber}</span>) in the transfer narration/reference
+            </AlertDescription>
+          </Alert>
+
+          <Separator />
+
+          <Alert className="important-alert">
+            <AlertCircle className="h-4 w-4 text-napps-gold" />
+            <AlertDescription className="alert-description">
+              After making the transfer, click the button below to send your payment proof via WhatsApp.
             </AlertDescription>
           </Alert>
         </div>
-
-        <Separator />
-
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            After making the transfer, click the button below to send your payment proof via WhatsApp.
-          </AlertDescription>
-        </Alert>
 
       </CardContent>
       <CardFooter className="flex flex-col gap-4">
         <Button 
           className="w-full"
           onClick={() => {
-            const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.name}\n*Phone:* ${phoneNumber}\n*Account Used:* Unity Bank - 0017190877`;
+            const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.full_name}\n*Phone:* ${phoneNumber}\n*Account Used:* Unity Bank - 0017190877`;
             window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
           }}
         >
