@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, User, CreditCard, Check, Upload } from "lucide-react"
+import { AlertCircle, User, CreditCard, Check, Send } from "lucide-react"
 import { Icons } from "@/components/icons"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -36,7 +36,7 @@ export default function PreRegisterPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Important</AlertTitle>
               <AlertDescription>
-                After registration, you will receive bank transfer details for payment. Make sure to include your payment reference code in your transfer narration.
+                After registration, you will receive bank transfer details for payment. Make sure to include your phone number in the transfer narration.
               </AlertDescription>
             </Alert>
 
@@ -62,19 +62,19 @@ export default function PreRegisterPage() {
                   <div>
                     <h4 className="font-medium">2. Make Bank Transfer</h4>
                     <p className="text-sm text-muted-foreground">
-                      Transfer registration fee using the provided bank details and reference code
+                      Transfer registration fee using the provided bank details
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start space-x-3 rounded-lg border p-4">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <Upload className="h-4 w-4 text-primary" />
+                    <Send className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-medium">3. Upload Proof</h4>
+                    <h4 className="font-medium">3. Verify Payment</h4>
                     <p className="text-sm text-muted-foreground">
-                      Upload your payment proof (screenshot or PDF)
+                      Send your payment proof via WhatsApp for quick verification
                     </p>
                   </div>
                 </div>
@@ -97,7 +97,7 @@ export default function PreRegisterPage() {
               <h3 className="text-lg font-medium">Things to Consider</h3>
               <ul className="space-y-2 list-disc pl-5">
                 <li>
-                  <span className="font-medium">Phone Number:</span> Use a valid phone number as you'll use it to login
+                  <span className="font-medium">Phone Number:</span> Use a valid phone number as you'll use it to login and verify payment
                 </li>
                 <li>
                   <span className="font-medium">Payment:</span> Registration fee is non-refundable
@@ -106,7 +106,7 @@ export default function PreRegisterPage() {
                   <span className="font-medium">School Details:</span> Provide accurate information about your school
                 </li>
                 <li>
-                  <span className="font-medium">Position in NAPPS:</span> Specify your role in the NAPPS organization
+                  <span className="font-medium">WhatsApp:</span> Make sure you have WhatsApp installed for payment verification
                 </li>
                 <li>
                   <span className="font-medium">Technical Issues:</span> If you encounter any problems during

@@ -3,25 +3,21 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { Loader2, Upload, Copy, AlertCircle } from "lucide-react"
+import { Loader2, Copy, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { uploadPaymentProof } from "@/actions/payment-actions"
 
 export default function PaymentPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
   const [registrationAmount, setRegistrationAmount] = useState<number | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
-  const [uploadingProof, setUploadingProof] = useState(false);
-  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -42,7 +38,6 @@ export default function PaymentPage() {
         setLoadingConfig(false);
       }
     }
-
     initialize();
   }, [session, toast]);
 
@@ -62,93 +57,33 @@ export default function PaymentPage() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSendProof = async () => {
+    setSubmitting(true);
     setError(null);
-    if (e.target.files?.[0]) {
-      const file = e.target.files[0];
-      
-      // Validate file type
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-      if (!allowedTypes.includes(file.type)) {
-        setError("Please upload an image (JPEG, PNG) or PDF");
-        toast({
-          title: "Invalid file type",
-          description: "Please upload an image (JPEG, PNG) or PDF",
-          variant: "destructive"
-        });
-        e.target.value = '';
-        return;
-      }
-
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setError("File size must be less than 5MB");
-        toast({
-          title: "File too large",
-          description: "Maximum file size is 5MB",
-          variant: "destructive"
-        });
-        e.target.value = '';
-        return;
-      }
-
-      setPaymentProofFile(file);
-    }
-  };
-
-  const handleProofUpload = async () => {
-    if (!paymentProofFile) {
-      toast({
-        title: "Error",
-        description: "Please select a file",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setUploadingProof(true);
-    setError(null);
-
+    
     try {
-      const result = await uploadPaymentProof(paymentProofFile);
-      
-      if (!result?.success) {
-        throw new Error('Upload failed');
+      const response = await fetch('/api/payment-proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userPhone: session?.user?.phone })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit payment notification');
       }
 
-      toast({
-        title: "Success",
-        description: "Payment proof uploaded successfully. Please wait for admin verification."
-      });
+      setSuccessMessage("Successfully notified admin. Redirecting to dashboard...");
       
-      // Clear file input and state
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-      setPaymentProofFile(null);
-
-      // Show success message with loading indicator before redirect
-      setSuccessMessage("Upload successful! Redirecting to dashboard...");
-      
-      // Redirect after a short delay
       setTimeout(() => {
         router.refresh();
         router.push("/participant/dashboard");
       }, 2000);
 
     } catch (error: any) {
-      console.error("Error uploading proof:", error);
-      const errorMessage = error.code === 'NETWORK_ERROR' 
-        ? error.message 
-        : error.message || "Failed to upload payment proof";
-      
-      setError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
+      console.error("Error submitting payment notification:", error);
+      setError(error.message || "Failed to submit payment notification");
     } finally {
-      setUploadingProof(false);
+      setSubmitting(false);
     }
   };
 
@@ -159,13 +94,8 @@ export default function PaymentPage() {
     }
   }, [status, router]);
 
-  // Add loading state for reference specifically
-  const isLoadingReference = status === 'loading' || loadingConfig;
-
-  // Return early if not authenticated
   if (status === 'unauthenticated') return null;
 
-  // Return loading state while checking authentication
   if (status === 'loading' || loadingConfig) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -249,40 +179,34 @@ export default function PaymentPage() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="mt-2">
-                Please include your phone number in the transfer narration/reference when making the payment. This helps us match your payment to your registration.
+                After making the transfer, click the button below to send your payment proof via WhatsApp to {session?.user?.phone === "08030822969" ? "an alternative number" : "08030822969"}.
               </AlertDescription>
             </Alert>
-
-            <div className="space-y-2">
-              <Label>Upload Payment Proof</Label>
-              <Input 
-                type="file" 
-                accept="image/jpeg,image/png,image/jpg,application/pdf" 
-                onChange={handleFileChange}
-                disabled={uploadingProof}
-                className={uploadingProof ? "opacity-50 cursor-not-allowed" : ""}
-              />
-              <p className="text-sm text-muted-foreground">
-                Upload a screenshot or PDF of your payment proof (Max 5MB)
-              </p>
-            </div>
           </CardContent>
-          <CardFooter>
-            <Button 
-              className="w-full" 
-              onClick={handleProofUpload} 
-              disabled={!paymentProofFile || uploadingProof}
+
+          <CardFooter className="flex flex-col gap-4">
+            <Button
+              className="w-full"
+              onClick={() => {
+                const message = `Hello, I have made payment for NAPPS Summit registration.\nName: ${session?.user?.name}\nPhone: ${session?.user?.phone}`;
+                window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
+              }}
             >
-              {uploadingProof ? (
+              Send Payment Proof on WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleSendProof}
+              disabled={submitting}
+            >
+              {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Uploading...
+                  Submitting...
                 </>
               ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Payment Proof
-                </>
+                "I've sent the proof on WhatsApp"
               )}
             </Button>
           </CardFooter>

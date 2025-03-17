@@ -1,15 +1,13 @@
 "use client"
 
-import { useState, useRef, useTransition } from 'react'
-import { Loader2, Upload, CheckCircle2, Copy, AlertCircle } from 'lucide-react'
+import { useState, useTransition } from 'react'
+import { Loader2, CheckCircle2, Copy, AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { fileUtils } from '@/lib/utils'
 
 interface PaymentProps {
   amount: number
@@ -18,11 +16,9 @@ interface PaymentProps {
   proofUrl?: string | null
 }
 
-export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: PaymentProps) {
+export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps) {
   const [isPending, startTransition] = useTransition()
-  const [uploading, setUploading] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
 
   const handleCopy = async (text: string) => {
@@ -39,82 +35,34 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) {
-      setSelectedFile(null)
-      return
-    }
-
-    // Validate file type
-    if (!['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(file.type)) {
-      event.target.value = ''
-      setSelectedFile(null)
-      toast({
-        title: "Invalid file type",
-        description: "Please upload an image (JPG/PNG) or PDF",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      event.target.value = ''
-      setSelectedFile(null)
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSelectedFile(file)
-  }
-
-  const handleProofUpload = async () => {
-    if (!selectedFile || uploading) return
-    setUploading(true)
-
+  const handleNotifyAdmin = async () => {
+    setSubmitting(true)
     try {
-      // Create form data
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-
-      // Upload directly to the server
-      const uploadResponse = await fetch('/api/upload-proof', {
+      const response = await fetch('/api/payment-proof', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userPhone: phoneNumber })
       })
 
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json()
-        throw new Error(error.error || 'Failed to upload file')
+      if (!response.ok) {
+        throw new Error('Failed to notify admin')
       }
 
       toast({
         title: "Success",
-        description: "Payment proof uploaded successfully. Please wait for admin verification.",
+        description: "Admin has been notified of your payment proof submission",
       })
-      
-      // Reset the form
-      setSelectedFile(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
 
-      // Use window.location.reload() for a full reload to ensure state is fresh
+      // Refresh the page to update status
       window.location.reload()
     } catch (error: any) {
-      console.error('Error uploading proof:', error)
       toast({
         title: "Error",
-        description: error.message || "Failed to upload payment proof. Please try again.",
+        description: error.message || "Failed to notify admin",
         variant: "destructive",
       })
     } finally {
-      setUploading(false)
+      setSubmitting(false)
     }
   }
 
@@ -142,31 +90,13 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
         <CardHeader>
           <CardTitle>Payment Status</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               Your payment proof has been submitted and is pending review
             </AlertDescription>
           </Alert>
-
-          {proofUrl && (
-            <div className="aspect-[3/2] relative overflow-hidden rounded-md border">
-              {fileUtils.isPdf(proofUrl) ? (
-                <iframe
-                  src={proofUrl}
-                  className="w-full h-full border-0"
-                  title="Payment proof PDF"
-                />
-              ) : (
-                <img
-                  src={proofUrl}
-                  alt="Payment proof"
-                  className="object-contain"
-                />
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
     )
@@ -232,38 +162,37 @@ export function ParticipantPayment({ amount, phoneNumber, status, proofUrl }: Pa
 
         <Separator />
 
-        <div>
-          <Label>Upload Payment Proof</Label>
-          <Input
-            type="file"
-            accept="image/jpeg,image/png,image/jpg,application/pdf"
-            onChange={handleFileChange}
-            disabled={uploading || isPending}
-            className={uploading || isPending ? "opacity-50 cursor-not-allowed" : ""}
-            ref={fileInputRef}
-          />
-          <p className="text-sm text-muted-foreground mt-2">
-            Maximum file size: 5MB. Supported formats: JPEG, PNG, PDF
-          </p>
-        </div>
-      </CardContent>
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            After making the transfer, click the button below to send your payment proof via WhatsApp.
+          </AlertDescription>
+        </Alert>
 
-      <CardFooter>
+      </CardContent>
+      <CardFooter className="flex flex-col gap-4">
         <Button 
-          onClick={handleProofUpload}
-          disabled={uploading || isPending || !selectedFile}
           className="w-full"
+          onClick={() => {
+            const message = `Hello, I have made payment for NAPPS Summit registration.\nPhone: ${phoneNumber}`;
+            window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
+          }}
         >
-          {(uploading || isPending) ? (
+          Send Payment Proof on WhatsApp
+        </Button>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={handleNotifyAdmin}
+          disabled={submitting || isPending}
+        >
+          {(submitting || isPending) ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              <span>Uploading...</span>
+              <span>Submitting...</span>
             </>
           ) : (
-            <>
-              <Upload className="mr-2 h-4 w-4" />
-              <span>Upload Proof</span>
-            </>
+            "I've sent the proof on WhatsApp"
           )}
         </Button>
       </CardFooter>

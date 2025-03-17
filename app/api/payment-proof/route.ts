@@ -11,26 +11,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { fileUrl } = await request.json();
-    if (!fileUrl) {
-      return NextResponse.json({ error: 'File URL is required' }, { status: 400 });
+    const { userPhone } = await request.json();
+    if (!userPhone) {
+      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 });
     }
 
     await withTransaction(async (client) => {
-      // Get current payment proof if any
-      const result = await client.query(
-        'SELECT payment_proof FROM profiles WHERE id = $1',
-        [session.user.id]
-      );
-
-      // Update profile with new proof
       await client.query(
         `UPDATE profiles 
-         SET payment_proof = $1,
-             payment_status = 'proof_submitted',
+         SET payment_status = 'proof_submitted',
+             payment_proof = 'whatsapp',
              updated_at = NOW()
-         WHERE id = $2`,
-        [fileUrl, session.user.id]
+         WHERE id = $1`,
+        [session.user.id]
       );
     });
 
@@ -42,7 +35,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Payment proof update error:', error);
     return NextResponse.json(
-      { error: 'Failed to update payment proof' },
+      { error: 'Failed to update payment status' },
       { status: 500 }
     );
   }
