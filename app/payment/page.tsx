@@ -123,8 +123,8 @@ export default function PaymentPage() {
               <div>
                 <Label>Account Name</Label>
                 <div className="flex items-center justify-between rounded-md border p-2">
-                  <span>NAPPS Summit Account</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('NAPPS Summit Account')}>
+                  <span>N.A.P.P.S. Nassarawa State</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('N.A.P.P.S. Nassarawa State')}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -133,8 +133,8 @@ export default function PaymentPage() {
               <div>
                 <Label>Bank</Label>
                 <div className="flex items-center justify-between rounded-md border p-2">
-                  <span>Zenith Bank</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('Zenith Bank')}>
+                  <span>Unity Bank</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('Unity Bank')}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -143,8 +143,8 @@ export default function PaymentPage() {
               <div>
                 <Label>Account Number</Label>
                 <div className="flex items-center justify-between rounded-md border p-2">
-                  <span>1234567890</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('1234567890')}>
+                  <span>0017190877</span>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('0017190877')}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -188,7 +188,7 @@ export default function PaymentPage() {
             <Button
               className="w-full"
               onClick={() => {
-                const message = `Hello, I have made payment for NAPPS Summit registration.\nName: ${session?.user?.name}\nPhone: ${session?.user?.phone}`;
+                const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.name}\n*Phone:* ${session?.user?.phone}\n*Account Used:* Unity Bank - 0017190877`;
                 window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
               }}
             >

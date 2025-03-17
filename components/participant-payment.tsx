@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
+import { useSession } from "next-auth/react"
 
 interface PaymentProps {
   amount: number
@@ -17,6 +18,7 @@ interface PaymentProps {
 }
 
 export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps) {
+  const { data: session } = useSession()
   const [isPending, startTransition] = useTransition()
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
@@ -115,8 +117,8 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
           <div>
             <Label>Account Name</Label>
             <div className="flex items-center justify-between rounded-md border p-2">
-              <span>NAPPS Summit Account</span>
-              <Button variant="ghost" size="icon" onClick={() => handleCopy('NAPPS Summit Account')}>
+              <span>N.A.P.P.S. Nassarawa State</span>
+              <Button variant="ghost" size="icon" onClick={() => handleCopy('N.A.P.P.S. Nassarawa State')}>
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -125,8 +127,8 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
           <div>
             <Label>Bank</Label>
             <div className="flex items-center justify-between rounded-md border p-2">
-              <span>Zenith Bank</span>
-              <Button variant="ghost" size="icon" onClick={() => handleCopy('Zenith Bank')}>
+              <span>Unity Bank</span>
+              <Button variant="ghost" size="icon" onClick={() => handleCopy('Unity Bank')}>
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -135,8 +137,8 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
           <div>
             <Label>Account Number</Label>
             <div className="flex items-center justify-between rounded-md border p-2">
-              <span>1234567890</span>
-              <Button variant="ghost" size="icon" onClick={() => handleCopy('1234567890')}>
+              <span>0017190877</span>
+              <Button variant="ghost" size="icon" onClick={() => handleCopy('0017190877')}>
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -174,7 +176,7 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
         <Button 
           className="w-full"
           onClick={() => {
-            const message = `Hello, I have made payment for NAPPS Summit registration.\nPhone: ${phoneNumber}`;
+            const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.name}\n*Phone:* ${phoneNumber}\n*Account Used:* Unity Bank - 0017190877`;
             window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
           }}
         >
