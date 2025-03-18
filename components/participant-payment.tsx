@@ -178,7 +178,7 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
           className="w-full"
           onClick={() => {
             const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.full_name}\n*Phone:* ${phoneNumber}\n*Account Used:* Unity Bank - 0017190877`;
-            window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
+            window.open(`https://wa.me/2347011098119?text=${encodeURIComponent(message)}`, '_blank');
           }}
         >
           Send Payment Proof on WhatsApp

@@ -179,7 +179,7 @@ export default function PaymentPage() {
             <Alert className="important-alert">
               <AlertCircle className="h-4 w-4 text-napps-gold" />
               <AlertDescription className="alert-description mt-2">
-                After making the transfer, click the button below to send your payment proof via WhatsApp to {session?.user?.phone === "08030822969" ? "an alternative number" : <span className="whatsapp-bold">08030822969</span>}.
+                After making the transfer, click the button below to send your payment proof via WhatsApp to {session?.user?.phone === "07011098119" ? "an alternative number" : <span className="whatsapp-bold">07011098119</span>}.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -189,7 +189,7 @@ export default function PaymentPage() {
               className="w-full"
               onClick={() => {
                 const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.full_name}\n*Phone:* ${session?.user?.phone}\n*Account Used:* Unity Bank - 0017190877`;
-                window.open(`https://wa.me/2348030822969?text=${encodeURIComponent(message)}`, '_blank');
+                window.open(`https://wa.me/2347011098119?text=${encodeURIComponent(message)}`, '_blank');
               }}
             >
               Send Payment Proof on WhatsApp
