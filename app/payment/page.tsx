@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { Loader2, Copy, AlertCircle } from "lucide-react"
+import { Loader2, Copy, AlertCircle, MessageSquare } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -191,7 +191,9 @@ export default function PaymentPage() {
                 const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.full_name}\n*Phone:* ${session?.user?.phone}\n*Account Used:* Unity Bank - 0017190877`;
                 window.open(`https://wa.me/2347011098119?text=${encodeURIComponent(message)}`, '_blank');
               }}
+              disabled={submitting}
             >
+              <MessageSquare className="mr-2 h-4 w-4" />
               Send Payment Proof on WhatsApp
             </Button>
             <Button

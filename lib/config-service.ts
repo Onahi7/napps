@@ -193,7 +193,7 @@ export async function getConferenceConfig() {
 // Initialize default configuration
 export async function initializeDefaultConfig(): Promise<void> {
   const defaultConfig = {
-    registrationAmount: 0,
+    registrationAmount: 20000,
     conference_name: '',
     conference_date: '',
     conference_venue: '',

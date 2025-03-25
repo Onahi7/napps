@@ -173,9 +173,8 @@ export async function getPaymentStatus() {
 
   try {
     const result = await query(
-      `SELECT p.payment_status, p.payment_amount, p.payment_date, p.payment_proof, u.phone 
+      `SELECT p.payment_status, p.payment_amount, p.payment_date, p.payment_proof, p.phone 
        FROM profiles p 
-       JOIN users u ON p.id = u.id 
        WHERE p.id = $1`,
       [session.user.id]
     );
@@ -254,5 +253,51 @@ export async function verifyHotelBookingPayment(reference: string, bookingId: st
     revalidatePath('/participant/accommodation')
     return { verified: true }
   })
+}
+
+// Function to update payment status after WhatsApp proof submission
+export async function updateWhatsappProofStatus(phoneNumber: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+  
+  try {
+    await query(
+      `UPDATE profiles 
+       SET payment_status = 'whatsapp_proof_submitted',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [session.user.id]
+    )
+    
+    revalidatePath('/payment')
+    revalidatePath('/participant/dashboard')
+    revalidatePath('/admin/payments')
+    
+    return { success: true }
+  } catch (error: any) {
+    console.error('WhatsApp proof status update error:', error)
+    throw new Error('Failed to update payment status')
+  }
+}
+
+// Function for admins to get all payments with WhatsApp proof submissions
+export async function getWhatsappProofSubmissions() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.role || session.user.role !== 'admin') throw new Error('Unauthorized')
+  
+  try {
+    const result = await query(
+      `SELECT p.id, p.full_name, p.email, p.phone, p.payment_amount, p.payment_status
+       FROM profiles p 
+       WHERE p.payment_status = 'whatsapp_proof_submitted'
+       ORDER BY p.updated_at DESC`,
+      []
+    )
+    
+    return result.rows
+  } catch (error) {
+    console.error('Error fetching WhatsApp proof submissions:', error)
+    throw error
+  }
 }
 
