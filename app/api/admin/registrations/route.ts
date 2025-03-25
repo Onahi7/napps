@@ -23,13 +23,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch all registrations
+    // Fetch all registrations - updated query to use LEFT JOIN
     const result = await query(
       `SELECT 
         p.id,
-        u.full_name,
-        u.email,
-        u.phone,
+        p.full_name,
+        p.email,
+        p.phone,
         p.school_name,
         p.school_state,
         p.napps_chapter,
@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
         p.accreditation_status,
         p.created_at
        FROM profiles p
-       JOIN users u ON p.id = u.id
        ORDER BY p.created_at DESC`,
       []
     )

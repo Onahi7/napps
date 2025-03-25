@@ -15,7 +15,8 @@ export async function getServerConfig<T>(key: string, defaultValue: T): Promise<
     }
     
     const value = result.rows[0].value
-    return typeof value === 'string' ? JSON.parse(value) : value
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+    return parsed || defaultValue
   } catch (error) {
     console.error(`Error in getServerConfig for key ${key}:`, error)
     return defaultValue
@@ -24,6 +25,6 @@ export async function getServerConfig<T>(key: string, defaultValue: T): Promise<
 
 // Get registration amount
 export async function getRegistrationAmount(): Promise<number> {
-  return getServerConfig<number>("registrationAmount", 15000)
+  return getServerConfig<number>("registrationAmount", 20000)
 }
 

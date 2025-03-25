@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch pending payments using profiles table fields
+    // Fetch pending payments that have submitted proof
     const result = await query(
       `SELECT 
         p.id,
@@ -32,10 +32,11 @@ export async function GET(request: NextRequest) {
         p.phone,
         p.payment_proof,
         p.payment_amount,
-        p.payment_status
+        p.payment_status,
+        p.created_at
        FROM profiles p
        WHERE p.payment_status = 'proof_submitted'
-       ORDER BY p.updated_at DESC`,
+       ORDER BY p.created_at DESC`,
       []
     )
 

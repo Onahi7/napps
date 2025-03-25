@@ -91,7 +91,23 @@ export async function updateConfig(key: string, value: any): Promise<{ success: 
 
 // Get specific configs
 export async function getRegistrationAmount(): Promise<number> {
-  return getServerConfig<number>("registrationAmount", 0)
+  try {
+    const result = await query(
+      'SELECT value FROM config WHERE key = $1',
+      ['registrationAmount']
+    )
+    
+    if (!result.rows[0]) {
+      return 20000 // Default registration amount if not set in config
+    }
+    
+    const value = result.rows[0].value
+    const amount = typeof value === 'string' ? JSON.parse(value) : value
+    return amount || 20000 // Fallback to 20000 if the value is null/undefined/0
+  } catch (error) {
+    console.error('Error getting registration amount:', error)
+    return 20000 // Default amount in case of error
+  }
 }
 
 export interface ConferenceHours {
