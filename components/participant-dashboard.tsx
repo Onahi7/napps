@@ -137,7 +137,7 @@ export function ParticipantDashboard() {
           {status.payment !== "completed" && (
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <span className="text-sm sm:text-base text-muted-foreground">Registration Fee:</span>
-              <span className="text-lg sm:text-xl font-bold">₦{registrationAmount.toLocaleString()}</span>
+              <span className="text-lg sm:text-xl font-bold">₦{20000}</span>
             </div>
           )}
           <Badge 

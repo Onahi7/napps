@@ -78,7 +78,7 @@ export function AdminDashboard() {
           <p className="text-xs text-muted-foreground">
             {conferenceDetails.date} • {conferenceDetails.venue}
           </p>
-          <p className="text-xs text-muted-foreground mt-2">Registration Fee: ₦{registrationAmount.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mt-2">Registration Fee: ₦{20000}</p>
         </CardContent>
         <CardFooter>
           <Link href="/admin/settings" className="w-full">
