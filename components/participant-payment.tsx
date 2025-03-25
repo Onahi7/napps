@@ -77,8 +77,8 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
         <CardContent>
           <Alert>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Payment completed successfully
+            <AlertDescription className="ml-2">
+              Your payment has been verified and approved
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -95,8 +95,8 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
         <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Your payment proof has been submitted and is pending review
+            <AlertDescription className="ml-2">
+              Your payment proof has been submitted and is under review. You will be notified once it is approved.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -171,7 +171,6 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
             </AlertDescription>
           </Alert>
         </div>
-
       </CardContent>
       <CardFooter className="flex flex-col gap-4">
         <Button 

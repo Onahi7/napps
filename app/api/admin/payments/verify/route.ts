@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     return await withTransaction(async (client) => {
       // Get the user profile 
       const result = await client.query(
-        'SELECT p.* FROM profiles p JOIN users u ON p.id = u.id WHERE u.phone = $1',
+        'SELECT * FROM profiles WHERE phone = $1',
         [phone]
       )
 
@@ -49,11 +49,10 @@ export async function POST(request: NextRequest) {
 
       // Update payment status
       await client.query(
-        `UPDATE profiles p
+        `UPDATE profiles 
          SET payment_status = 'completed',
              updated_at = NOW()
-         FROM users u
-         WHERE p.id = u.id AND u.phone = $1`,
+         WHERE phone = $1`,
         [phone]
       )
 

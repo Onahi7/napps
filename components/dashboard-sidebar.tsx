@@ -81,7 +81,7 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
   }
 
   return (
-    <Sidebar className="border-r">
+    <Sidebar className="border-r bg-background z-50" collapsible="offcanvas">
       <SidebarHeader className="flex h-14 items-center border-b px-4">
         <Link
           href={`/${role}/dashboard`}
@@ -89,29 +89,37 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
         >
           <School className="h-6 w-6 text-napps-gold" />
           <span className="text-napps-gold">NAPPS</span>
-          <span className="text-sm font-normal text-muted-foreground">Summit</span>
+          <span className="text-sm font-normal text-muted-foreground hidden md:inline">Summit</span>
         </Link>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarMenu>
+      <SidebarContent className="px-2">
+        <SidebarMenu className="space-y-1">
           {menuItems.map((item) => (
-            <SidebarMenuItem key={item.href} className={pathname === item.href ? "bg-muted" : ""}>
-              <Link href={item.href} className="flex w-full items-center gap-3">
+            <SidebarMenuItem key={item.href}>
+              <Link 
+                href={item.href} 
+                className={cn(
+                  "flex w-full items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                  pathname === item.href 
+                    ? "bg-accent text-accent-foreground" 
+                    : "hover:bg-muted"
+                )}
+              >
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                <span>{item.label}</span>
               </Link>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-        <SidebarSeparator />
+        <SidebarSeparator className="my-4" />
         <SidebarMenu>
           <SidebarMenuItem>
             <button
               onClick={() => signOut()}
-              className="flex w-full items-center gap-3 text-destructive"
+              className="flex w-full items-center gap-3 px-3 py-2 text-destructive hover:bg-destructive/10 rounded-md transition-colors"
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              <span>Logout</span>
             </button>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
+import { query } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,27 +23,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch pending payments using profiles table fields
+    // Fetch all registrations
     const result = await query(
       `SELECT 
         p.id,
-        p.full_name,
-        p.email,
-        p.phone,
-        p.payment_proof,
-        p.payment_amount,
-        p.payment_status
+        u.full_name,
+        u.email,
+        u.phone,
+        p.school_name,
+        p.school_state,
+        p.napps_chapter,
+        p.payment_status,
+        p.accreditation_status,
+        p.created_at
        FROM profiles p
-       WHERE p.payment_status = 'proof_submitted'
-       ORDER BY p.updated_at DESC`,
+       JOIN users u ON p.id = u.id
+       ORDER BY p.created_at DESC`,
       []
     )
 
     return NextResponse.json(result.rows)
   } catch (error: any) {
-    console.error('Error fetching payments:', error)
+    console.error('Error fetching registrations:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch payments' },
+      { error: error.message || 'Failed to fetch registrations' },
       { status: 500 }
     )
   }

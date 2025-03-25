@@ -1,10 +1,76 @@
 'use server'
 
-import { query } from '@/lib/db'
+import { query, withTransaction } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { hash } from 'bcrypt'
 import { revalidatePath } from 'next/cache'
+import type { PoolClient } from 'pg'
+
+interface PaymentActionResult {
+  success: boolean;
+  error?: string;
+}
+
+export async function approvePayment(userId: string): Promise<PaymentActionResult> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    await withTransaction(async (client: PoolClient) => {
+      await client.query(
+        `UPDATE profiles 
+         SET payment_status = 'completed',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [userId]
+      )
+    })
+
+    revalidatePath('/admin/registrations')
+    revalidatePath('/admin/payments')
+    revalidatePath('/participant/dashboard')
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error approving payment:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function rejectPayment(userId: string): Promise<PaymentActionResult> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    await withTransaction(async (client: PoolClient) => {
+      // Get the current payment proof file path
+      const result = await client.query(
+        'SELECT payment_proof FROM profiles WHERE id = $1',
+        [userId]
+      )
+
+      // Reset payment status and clear proof
+      await client.query(
+        `UPDATE profiles 
+         SET payment_status = 'pending',
+             payment_proof = NULL,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [userId]
+      )
+    })
+
+    revalidatePath('/admin/registrations')
+    revalidatePath('/admin/payments')
+    revalidatePath('/participant/dashboard')
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error rejecting payment:', error)
+    return { success: false, error: error.message }
+  }
+}
 
 export async function createValidator(data: {
   email: string

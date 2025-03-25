@@ -7,85 +7,55 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Download, Share2, QrCode, Phone, CheckSquare, Coffee } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import { Loader2 } from "lucide-react";
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { Loader2 } from "lucide-react"
+import { useSession, signIn } from 'next-auth/react'
+import QRCode from 'qrcode'
 
 export default function ParticipantQRCode() {
-  const { data: session, status } = useSession();
-
+  const { data: session, status } = useSession()
   const qrCanvasRef = useRef<HTMLCanvasElement>(null)
   const [activeTab, setActiveTab] = useState("qrcode")
 
   useEffect(() => {
-    // In a real app, this would be generated from the user's unique ID
-    // For demo purposes, we'll just draw a simple QR-like pattern
-    const drawQRCode = () => {
+    const generateQRCode = async () => {
+      if (!session?.user) return
+      
       const canvas = qrCanvasRef.current
       if (!canvas) return
 
-      const ctx = canvas.getContext("2d")
-      if (!ctx) return
-
-      const size = 300
-      const cellSize = 10
-      const margin = 30
-
-      canvas.width = size
-      canvas.height = size
-
-      // Clear canvas
-      ctx.fillStyle = "white"
-      ctx.fillRect(0, 0, size, size)
-
-      // Draw QR code-like pattern
-      ctx.fillStyle = "black"
-
-      // Draw position detection patterns (corners)
-      // Top-left
-      ctx.fillRect(margin, margin, 7 * cellSize, 7 * cellSize)
-      ctx.fillStyle = "white"
-      ctx.fillRect(margin + cellSize, margin + cellSize, 5 * cellSize, 5 * cellSize)
-      ctx.fillStyle = "black"
-      ctx.fillRect(margin + 2 * cellSize, margin + 2 * cellSize, 3 * cellSize, 3 * cellSize)
-
-      // Top-right
-      ctx.fillStyle = "black"
-      ctx.fillRect(size - margin - 7 * cellSize, margin, 7 * cellSize, 7 * cellSize)
-      ctx.fillStyle = "white"
-      ctx.fillRect(size - margin - 6 * cellSize, margin + cellSize, 5 * cellSize, 5 * cellSize)
-      ctx.fillStyle = "black"
-      ctx.fillRect(size - margin - 5 * cellSize, margin + 2 * cellSize, 3 * cellSize, 3 * cellSize)
-
-      // Bottom-left
-      ctx.fillStyle = "black"
-      ctx.fillRect(margin, size - margin - 7 * cellSize, 7 * cellSize, 7 * cellSize)
-      ctx.fillStyle = "white"
-      ctx.fillRect(margin + cellSize, size - margin - 6 * cellSize, 5 * cellSize, 5 * cellSize)
-      ctx.fillStyle = "black"
-      ctx.fillRect(margin + 2 * cellSize, size - margin - 5 * cellSize, 3 * cellSize, 3 * cellSize)
-
-      // Draw random data cells
-      for (let i = 0; i < 20; i++) {
-        for (let j = 0; j < 20; j++) {
-          if (Math.random() > 0.5) {
-            const x = margin + 8 * cellSize + i * cellSize
-            const y = margin + j * cellSize
-            if (x < size - margin && y < size - margin) {
-              ctx.fillRect(x, y, cellSize, cellSize)
-            }
-          }
-        }
+      // Generate QR code with participant details
+      const participantData = {
+        id: session.user.id,
+        name: session.user.full_name,
+        phone: session.user.phone,
+        type: "participant"
       }
 
-      // Add NAPPS text
-      ctx.font = "bold 16px Arial"
-      ctx.fillStyle = "black"
-      ctx.textAlign = "center"
-      ctx.fillText("NAPPS CONFERENCE 2025", size / 2, size - 10)
+      try {
+        await QRCode.toCanvas(canvas, JSON.stringify(participantData), {
+          width: 300,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#ffffff',
+          },
+        })
+
+        // Add NAPPS text below QR code
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.font = "bold 16px Arial"
+          ctx.fillStyle = "black"
+          ctx.textAlign = "center"
+          ctx.fillText("NAPPS CONFERENCE 2025", canvas.width / 2, canvas.height - 10)
+        }
+      } catch (error) {
+        console.error('Error generating QR code:', error)
+      }
     }
 
-    drawQRCode()
-  }, [])
+    generateQRCode()
+  }, [session])
 
   const handleDownload = () => {
     const canvas = qrCanvasRef.current
@@ -105,7 +75,7 @@ export default function ParticipantQRCode() {
       <div className='flex h-screen items-center justify-center'>
         <Loader2 className='h-8 w-8 animate-spin text-primary' />
       </div>
-    );
+    )
   }
 
   if (!session) {
@@ -113,7 +83,7 @@ export default function ParticipantQRCode() {
       <div className='flex h-screen items-center justify-center'>
         <button onClick={() => signIn()}>Sign in</button>
       </div>
-    );
+    )
   }
 
   return (
@@ -156,7 +126,7 @@ export default function ParticipantQRCode() {
                   <div className="rounded-lg border p-8 bg-napps-green/10 text-center">
                     <Phone className="h-12 w-12 text-napps-green mx-auto mb-4" />
                     <h3 className="text-xl font-bold mb-2">Your Registered Phone</h3>
-                    <p className="text-3xl font-bold text-napps-green mb-2">08012345678</p>
+                    <p className="text-3xl font-bold text-napps-green mb-2">{session.user.phone}</p>
                     <p className="text-sm text-muted-foreground">
                       Show this number to validators for accreditation and meal validation
                     </p>
@@ -196,13 +166,10 @@ export default function ParticipantQRCode() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
                 <div className="text-sm font-medium">Name:</div>
-                <div className="text-sm">John Doe</div>
+                <div className="text-sm">{session.user.full_name}</div>
 
                 <div className="text-sm font-medium">Ticket Type:</div>
                 <div className="text-sm">Regular</div>
-
-                <div className="text-sm font-medium">Registration ID:</div>
-                <div className="text-sm">NAPPS-2025-1234</div>
 
                 <div className="text-sm font-medium">Status:</div>
                 <div className="text-sm">

@@ -124,6 +124,7 @@ export function ParticipantDashboard() {
           </div>
         </CardContent>
       </Card>
+
       {/* Payment Status Card */}
       <Card className="w-full border-napps-gold/30">
         <CardHeader className="pb-2">
@@ -133,31 +134,39 @@ export function ParticipantDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <span className="text-sm sm:text-base text-muted-foreground">Registration Fee:</span>
-            <span className="text-lg sm:text-xl font-bold">₦{20000 - registrationAmount}</span>
-          </div>
-          <Badge variant={getBadgeVariant(status.payment, 'payment')} className="whitespace-normal text-center w-full sm:w-auto">
-            {status.payment === "completed" ? "Paid" : 
-             status.payment === "proof_submitted" ? "Proof Submitted" : 
+          {status.payment !== "completed" && (
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <span className="text-sm sm:text-base text-muted-foreground">Registration Fee:</span>
+              <span className="text-lg sm:text-xl font-bold">₦{registrationAmount.toLocaleString()}</span>
+            </div>
+          )}
+          <Badge 
+            variant={getBadgeVariant(status.payment, 'payment')} 
+            className="whitespace-normal text-center w-full sm:w-auto"
+          >
+            {status.payment === "completed" ? "Payment Approved" : 
+             status.payment === "proof_submitted" ? "Proof Submitted - Under Review" : 
              "Pending Payment"}
           </Badge>
-          <ParticipantPayment 
-            amount={20000 - registrationAmount} 
-            phoneNumber={profile?.phone || ''}
-            status={status.payment}
-            proofUrl={paymentProof || undefined}
-          />
+          {status.payment !== "completed" && (
+            <ParticipantPayment 
+              amount={registrationAmount}
+              phoneNumber={profile?.phone || ''}
+              status={status.payment}
+              proofUrl={paymentProof || undefined}
+            />
+          )}
         </CardContent>
-        <CardFooter>
-          {status.payment !== "completed" && status.payment !== "proof_submitted" && (
+        {status.payment !== "completed" && status.payment !== "proof_submitted" && (
+          <CardFooter>
             <Button asChild className="w-full" variant="gold">
               <Link href="/payment">Pay Now</Link>
             </Button>
-          )}
-        </CardFooter>
+          </CardFooter>
+        )}
       </Card>
-      {/* Accreditation Status Card */}
+
+      {/* Accreditation Card */}
       <Card className="w-full border-napps-gold/30">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -182,6 +191,7 @@ export function ParticipantDashboard() {
           </Button>
         </CardFooter>
       </Card>
+
       {/* Accommodation Status Card */}
       <Card className="w-full border-napps-gold/30">
         <CardHeader className="pb-2">

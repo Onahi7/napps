@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     return await withTransaction(async (client) => {
       // Get the current payment proof file path
       const result = await client.query(
-        'SELECT p.payment_proof FROM profiles p JOIN users u ON p.id = u.id WHERE u.phone = $1',
+        'SELECT payment_proof FROM profiles WHERE phone = $1',
         [phone]
       )
 
@@ -54,12 +54,11 @@ export async function POST(request: NextRequest) {
 
       // Reset payment status and proof
       await client.query(
-        `UPDATE profiles p
+        `UPDATE profiles 
          SET payment_status = 'pending',
              payment_proof = NULL,
              updated_at = NOW()
-         FROM users u
-         WHERE p.id = u.id AND u.phone = $1`,
+         WHERE phone = $1`,
         [phone]
       )
 
