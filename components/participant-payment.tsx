@@ -174,7 +174,7 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
           <Alert className="important-alert">
             <AlertCircle className="h-4 w-4 text-napps-gold" />
             <AlertDescription className="alert-description">
-              After making the transfer, click the button below to send your payment proof via WhatsApp.
+              After making the transfer, click the button below to send your payment proof via WhatsApp yes .
             </AlertDescription>
           </Alert>
         </div>
