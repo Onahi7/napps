@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Eye } from "lucide-react"
+import { Eye, Check, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
   Dialog,
@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface Registration {
   id: string
@@ -34,6 +35,7 @@ export function AdminRegistrationList() {
   const [loading, setLoading] = useState(true)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null)
+  const [processingId, setProcessingId] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -57,6 +59,74 @@ export function AdminRegistrationList() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleVerify = async (phone: string) => {
+    setProcessingId(phone)
+    try {
+      const response = await fetch('/api/admin/payments/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      })
+
+      if (!response.ok) throw new Error('Failed to verify payment')
+
+      toast({
+        title: "Success",
+        description: "Payment verified successfully"
+      })
+
+      // Update the registration status
+      setRegistrations(prev => prev.map(r => 
+        r.phone === phone 
+          ? { ...r, payment_status: 'completed' }
+          : r
+      ))
+    } catch (error) {
+      console.error('Error verifying payment:', error)
+      toast({
+        title: "Error",
+        description: "Failed to verify payment",
+        variant: "destructive"
+      })
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleReject = async (phone: string) => {
+    setProcessingId(phone)
+    try {
+      const response = await fetch('/api/admin/payments/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      })
+
+      if (!response.ok) throw new Error('Failed to reject payment')
+
+      toast({
+        title: "Success",
+        description: "Payment rejected"
+      })
+
+      // Update the registration status
+      setRegistrations(prev => prev.map(r => 
+        r.phone === phone 
+          ? { ...r, payment_status: 'pending' }
+          : r
+      ))
+    } catch (error) {
+      console.error('Error rejecting payment:', error)
+      toast({
+        title: "Error",
+        description: "Failed to reject payment",
+        variant: "destructive"
+      })
+    } finally {
+      setProcessingId(null)
     }
   }
 
@@ -89,6 +159,7 @@ export function AdminRegistrationList() {
             <TableHead>School</TableHead>
             <TableHead>Chapter</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Payment</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -122,6 +193,31 @@ export function AdminRegistrationList() {
                     {registration.accreditation_status === 'completed' ? 'Accredited' : 'Not Accredited'}
                   </Badge>
                 </div>
+              </TableCell>
+              <TableCell>
+                {registration.payment_status !== 'completed' && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleVerify(registration.phone)}
+                      disabled={!!processingId}
+                    >
+                      <Check className="mr-1 h-3 w-3" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleReject(registration.phone)}
+                      disabled={!!processingId}
+                    >
+                      <X className="mr-1 h-3 w-3" />
+                      Reject
+                    </Button>
+                  </div>
+                )}
               </TableCell>
               <TableCell className="text-right">
                 <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
@@ -186,9 +282,11 @@ export function AdminRegistrationList() {
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Payment Status:</span>
-                              <Badge variant={selectedRegistration.payment_status === 'completed' ? 'default' : 'secondary'}>
-                                {selectedRegistration.payment_status === 'completed' ? 'Paid' : 'Pending Payment'}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={selectedRegistration.payment_status === 'completed' ? 'default' : 'secondary'}>
+                                  {selectedRegistration.payment_status === 'completed' ? 'Paid' : 'Pending Payment'}
+                                </Badge>
+                              </div>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Accreditation Status:</span>

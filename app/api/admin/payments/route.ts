@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
+import { query } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch pending payments that have submitted proof
+    // Fetch all registrations that aren't completed
     const result = await query(
       `SELECT 
         p.id,
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         p.payment_status,
         p.created_at
        FROM profiles p
-       WHERE p.payment_status = 'proof_submitted'
+       WHERE p.payment_status != 'completed'
        ORDER BY p.created_at DESC`,
       []
     )

@@ -122,7 +122,7 @@ export function ParticipantPayment({ amount, phoneNumber, status }: PaymentProps
       <CardHeader>
         <CardTitle>Payment Information</CardTitle>
         <CardDescription>
-          Please make a bank transfer of ₦{amount.toLocaleString()} to the account below
+          Please make a bank transfer of ₦20000 to the account below
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
