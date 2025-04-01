@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, User, CreditCard, Check, Send } from "lucide-react"
+import { AlertCircle, User, CreditCard, Check, Upload } from "lucide-react"
 import { Icons } from "@/components/icons"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -69,12 +69,12 @@ export default function PreRegisterPage() {
 
                 <div className="flex items-start space-x-3 rounded-lg border p-4">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <Send className="h-4 w-4 text-primary" />
+                    <Upload className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-medium">3. Verify Payment</h4>
+                    <h4 className="font-medium">3. Upload Proof</h4>
                     <p className="text-sm text-muted-foreground">
-                      Send your payment proof via WhatsApp for quick verification
+                      Upload your payment proof for verification
                     </p>
                   </div>
                 </div>
@@ -97,7 +97,7 @@ export default function PreRegisterPage() {
               <h3 className="text-lg font-medium">Things to Consider</h3>
               <ul className="space-y-2 list-disc pl-5">
                 <li>
-                  <span className="font-medium">Phone Number:</span> Use a valid phone number as you'll use it to login and verify payment
+                  <span className="font-medium">Phone Number:</span> Use a valid phone number as you'll use it to login and for payment reference
                 </li>
                 <li>
                   <span className="font-medium">Payment:</span> Registration fee is non-refundable
@@ -106,7 +106,7 @@ export default function PreRegisterPage() {
                   <span className="font-medium">School Details:</span> Provide accurate information about your school
                 </li>
                 <li>
-                  <span className="font-medium">WhatsApp:</span> Make sure you have WhatsApp installed for payment verification
+                  <span className="font-medium">Payment Proof:</span> Upload a clear image or PDF of your payment receipt/transfer confirmation
                 </li>
                 <li>
                   <span className="font-medium">Technical Issues:</span> If you encounter any problems during

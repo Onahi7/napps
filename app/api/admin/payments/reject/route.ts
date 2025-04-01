@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
 import { query, withTransaction } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { GoogleDriveStorage } from '@/lib/google-drive-storage'
+import { CloudinaryService } from '@/lib/cloudinary-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,11 +43,16 @@ export async function POST(request: NextRequest) {
 
       if (result.rows[0]?.payment_proof) {
         try {
-          // Delete the file from Google Drive
-          const storage = GoogleDriveStorage.getInstance()
-          await storage.deleteFile(result.rows[0].payment_proof)
+          const proofUrl = result.rows[0].payment_proof;
+          const cloudinary = CloudinaryService.getInstance();
+          const publicId = cloudinary.getPublicIdFromUrl(proofUrl);
+          
+          if (publicId) {
+            console.log('[RejectAPI] Deleting file from Cloudinary:', publicId);
+            await cloudinary.deleteFile(publicId);
+          }
         } catch (error) {
-          console.error('Failed to delete payment proof file:', error)
+          console.error('[RejectAPI] Failed to delete payment proof file:', error)
           // Continue anyway as we want to update the payment status
         }
       }
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     })
   } catch (error: any) {
-    console.error('Payment rejection error:', error)
+    console.error('[RejectAPI] Payment rejection error:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to reject payment' },
       { status: 500 }

@@ -1,303 +1,396 @@
 'use server'
-import { query, withTransaction } from '@/lib/db'
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
-import { getConfig } from '@/lib/config-service'
 import { revalidatePath } from 'next/cache'
+import { PrismaClient, PaymentStatus } from '@prisma/client'
+import { uploadToCloudinary } from '@/lib/cloudinary-service'
+import { getConfig } from './config-actions'
+import { generateParticipantReference } from '@/lib/utils/reference-generator'
+import { query } from '@/lib/db'
 
-class PaymentError extends Error {
-  constructor(message: string, public code: string, public source: string, public originalError?: any) {
-    super(message);
-    this.name = 'PaymentError';
-  }
-}
+const prisma = new PrismaClient()
 
-async function retryFetch(url: string, options: RequestInit, retries = 3): Promise<Response> {
-  let lastError: Error | null = null;
-  
-  for (let i = 0; i < retries; i++) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Cache-Control': 'no-cache' // Prevent caching issues
-        }
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Request failed');
-      }
-      
-      return response;
-    } catch (error: any) {
-      lastError = error;
-      if (i < retries - 1) {
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, i), 5000)));
-        continue;
-      }
-    }
-  }
-  
-  throw lastError || new Error('Failed after retries');
-}
-
-export async function initializePayment(amount: number) {
+export async function uploadPaymentProof(data: {
+  amount: number
+  transactionReference: string
+  file: File
+}) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
   try {
-    await query('SELECT 1');
-    
-    const profile = await query(
-      'SELECT payment_status FROM profiles p WHERE p.id = $1',
-      [session.user.id]
-    )
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!participant) throw new Error('Not a participant')
 
-    if (profile.rows[0]?.payment_status === 'completed') {
-      throw new Error('Payment already completed')
-    }
+    // Upload proof to Cloudinary
+    const buffer = await data.file.arrayBuffer()
+    const uploadResult = await uploadToCloudinary(Buffer.from(buffer))
 
-    await query(
-      `UPDATE profiles 
-       SET payment_amount = $1,
-           payment_status = 'pending',
-           payment_proof = NULL,
-           updated_at = NOW()
-       WHERE id = $2`,
-      [amount, session.user.id]
-    )
+    // Update participant with payment info
+    await prisma.participant.update({
+      where: { id: participant.id },
+      data: {
+        paymentAmount: data.amount,
+        paymentProof: uploadResult.secure_url,
+        paymentStatus: 'PROOF_SUBMITTED',
+        paymentDate: new Date()
+      }
+    })
 
-    return { success: true }
-  } catch (error: any) {
-    console.error('Payment initialization error:', error)
-    throw new Error('Failed to initialize payment')
-  }
-}
-
-export async function uploadPaymentProof(file: File) {
-  try {
-    // Convert file to FormData
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await retryFetch('/api/upload-proof', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new PaymentError(
-        error.error || 'Failed to upload payment proof',
-        'UPLOAD_ERROR',
-        'upload'
-      );
-    }
-
-    const { url: fileUrl } = await response.json();
-
-    revalidatePath('/payment');
-    revalidatePath('/participant/dashboard');
-    revalidatePath('/admin/payments');
-
-    return { success: true, fileUrl };
-  } catch (error: any) {
-    console.error('[PaymentActions] Payment proof upload error:', error);
-    
-    // Enhance error messages for common network issues
-    if (error.message?.includes('fetch')) {
-      throw new PaymentError(
-        'Network connection error. Please check your internet connection and try again.',
-        'NETWORK_ERROR',
-        'fetch',
-        error
-      );
-    }
-    
-    if (error instanceof PaymentError) {
-      throw error;
-    }
-    
-    throw new PaymentError(
-      error.message || 'An unexpected error occurred',
-      'UNKNOWN_ERROR',
-      'payment-action',
-      error
-    );
-  }
-}
-
-export async function verifyPayment(reference: string) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) throw new Error('Unauthorized')
-
-  return await withTransaction(async (client) => {
-    const profile = await client.query(
-      'SELECT payment_status FROM profiles WHERE id = $1',
-      [session.user.id]
-    )
-
-    if (!profile.rows[0]) {
-      throw new Error('Profile not found')
-    }
-
-    if (profile.rows[0].payment_status === 'completed') {
-      throw new Error('Payment already verified')
-    }
-
-    await client.query(
-      `UPDATE profiles 
-       SET payment_status = 'completed',
-           updated_at = NOW()
-       WHERE id = $1`,
-      [session.user.id]
-    )
-
+    revalidatePath('/participant/payment')
     revalidatePath('/admin/payments')
-    revalidatePath('/participant/dashboard')
-    return { verified: true }
-  })
-}
-
-export async function getPaymentStatus() {
-  const session = await getServerSession(authOptions);
-  console.log('Getting payment status for user:', session?.user?.id);
-  
-  if (!session?.user?.id) {
-    console.log('No user session found');
-    return null;
-  }
-
-  try {
-    const result = await query(
-      `SELECT p.payment_status, p.payment_amount, p.payment_date, p.payment_proof, p.phone 
-       FROM profiles p 
-       WHERE p.id = $1`,
-      [session.user.id]
-    );
-    
-    console.log('Payment status query result:', result.rows[0]);
-    return result.rows[0] || null;
+    return participant.id
   } catch (error) {
-    console.error('Error getting payment status:', error);
-    throw error;
+    console.error('Error uploading payment proof:', error)
+    throw error
   }
 }
 
-export async function getRegistrationAmount() {
-  return getConfig('registrationAmount') || 20000
-}
-
-// Function to verify registration payment
-export async function verifyRegistrationPayment() {
+export async function verifyPayment(participantId: string, status: PaymentStatus) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  return await withTransaction(async (client) => {
-    const profile = await client.query(
-      'SELECT payment_status FROM profiles WHERE id = $1',
-      [session.user.id]
-    )
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
 
-    if (!profile.rows[0]) {
-      throw new Error('Profile not found')
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId }
+    })
+    if (!participant) throw new Error('Participant not found')
+
+    // Update payment status
+    await prisma.participant.update({
+      where: { id: participantId },
+      data: { paymentStatus: status }
+    })
+
+    // If payment is completed, generate reference code if not exists
+    if (status === 'COMPLETED' && !participant.referenceCode) {
+      const referenceCode = await generateParticipantReference()
+      await prisma.participant.update({
+        where: { id: participantId },
+        data: { referenceCode }
+      })
     }
 
-    if (profile.rows[0].payment_status === 'completed') {
-      return { verified: true }
-    }
-
-    await client.query(
-      `UPDATE profiles 
-       SET payment_status = 'completed',
-           updated_at = NOW()
-       WHERE id = $1`,
-      [session.user.id]
-    )
-
+    revalidatePath('/participant/payment')
     revalidatePath('/admin/payments')
-    revalidatePath('/participant/dashboard')
-    return { verified: true }
-  })
+    return { success: true }
+  } catch (error) {
+    console.error('Error verifying payment:', error)
+    throw error
+  }
 }
 
-// Function to verify hotel booking payment
-export async function verifyHotelBookingPayment(reference: string, bookingId: string) {
+export async function getPendingPayments() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
-  
-  return await withTransaction(async (client) => {
-    const booking = await client.query(
-      'SELECT id, payment_status FROM bookings WHERE id = $1 AND user_id = $2',
-      [bookingId, session.user.id]
-    )
-    
-    if (!booking.rows[0]) throw new Error('Booking not found')
-    
-    if (booking.rows[0].payment_status === 'completed') {
-      return { verified: true }
+
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
+
+    const payments = await prisma.participant.findMany({
+      where: {
+        paymentStatus: 'PROOF_SUBMITTED'
+      },
+      include: {
+        user: true
+      },
+      orderBy: {
+        paymentDate: 'desc'
+      }
+    })
+
+    return payments.map(p => ({
+      id: p.id,
+      fullName: p.user.fullName,
+      email: p.user.email,
+      phone: p.user.phone,
+      state: p.state,
+      chapter: p.chapter,
+      amount: p.paymentAmount,
+      proofUrl: p.paymentProof,
+      date: p.paymentDate?.toLocaleDateString()
+    }))
+  } catch (error) {
+    console.error('Error getting pending payments:', error)
+    throw error
+  }
+}
+
+export async function getPaymentStats() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
+
+    const [
+      totalRegistrations,
+      completedPayments,
+      pendingProofs,
+      totalAmount,
+      recentPayments
+    ] = await Promise.all([
+      // Total registrations
+      prisma.participant.count(),
+      // Completed payments
+      prisma.participant.count({
+        where: { paymentStatus: 'COMPLETED' }
+      }),
+      // Pending proofs
+      prisma.participant.count({
+        where: { paymentStatus: 'PROOF_SUBMITTED' }
+      }),
+      // Total amount collected
+      prisma.participant.aggregate({
+        where: { paymentStatus: 'COMPLETED' },
+        _sum: {
+          paymentAmount: true
+        }
+      }),
+      // Recent payments
+      prisma.participant.findMany({
+        where: {
+          paymentStatus: 'COMPLETED',
+          paymentDate: { not: null }
+        },
+        include: {
+          user: true
+        },
+        orderBy: {
+          paymentDate: 'desc'
+        },
+        take: 10
+      })
+    ])
+
+    // Payment by state stats
+    const byState = await prisma.participant.groupBy({
+      by: ['state'],
+      where: { paymentStatus: 'COMPLETED' },
+      _count: true,
+      _sum: {
+        paymentAmount: true
+      }
+    })
+
+    return {
+      total_registrations: totalRegistrations,
+      completed_payments: completedPayments,
+      pending_proofs: pendingProofs,
+      total_amount: totalAmount._sum.paymentAmount || 0,
+      completion_rate: Math.round((completedPayments / totalRegistrations) * 100) || 0,
+      by_state: byState.map(s => ({
+        state: s.state,
+        count: s._count,
+        amount: s._sum.paymentAmount || 0
+      })),
+      recent: recentPayments.map(p => ({
+        name: p.user.fullName,
+        email: p.user.email,
+        amount: p.paymentAmount,
+        date: p.paymentDate?.toLocaleDateString()
+      }))
     }
-    
-    await client.query(
+  } catch (error) {
+    console.error('Error getting payment stats:', error)
+    throw error
+  }
+}
+
+export async function getParticipantPayment(participantId?: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    // If participantId is provided, verify admin access
+    if (participantId) {
+      const admin = await prisma.admin.findFirst({
+        where: { userId: session.user.id }
+      })
+      if (!admin) throw new Error('Unauthorized')
+    }
+
+    // Get participant
+    const participant = await prisma.participant.findFirst({
+      where: {
+        ...(participantId ? { id: participantId } : { userId: session.user.id })
+      },
+      include: {
+        user: true
+      }
+    })
+    if (!participant) throw new Error('Participant not found')
+
+    // Get conference fee from config
+    const registrationFee = await getConfig('conference.registrationFee') || 20000
+
+    return {
+      status: participant.paymentStatus,
+      amount: participant.paymentAmount || registrationFee,
+      proofUrl: participant.paymentProof,
+      date: participant.paymentDate?.toLocaleDateString(),
+      referenceCode: participant.referenceCode,
+      fullName: participant.user.fullName,
+      email: participant.user.email,
+      phone: participant.user.phone
+    }
+  } catch (error) {
+    console.error('Error getting participant payment:', error)
+    throw error
+  }
+}
+
+export async function getPaymentsByState(state: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
+
+    const payments = await prisma.participant.findMany({
+      where: {
+        state,
+        paymentStatus: 'COMPLETED'
+      },
+      include: {
+        user: true
+      },
+      orderBy: {
+        paymentDate: 'desc'
+      }
+    })
+
+    return payments.map(p => ({
+      id: p.id,
+      fullName: p.user.fullName,
+      email: p.user.email,
+      chapter: p.chapter,
+      amount: p.paymentAmount,
+      date: p.paymentDate?.toLocaleDateString(),
+      referenceCode: p.referenceCode
+    }))
+  } catch (error) {
+    console.error('Error getting payments by state:', error)
+    throw error
+  }
+}
+
+export interface PaymentVerificationResult {
+  verified: boolean
+  error?: string
+  status?: string
+}
+
+export async function verifyRegistrationPayment(): Promise<PaymentVerificationResult> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!participant) throw new Error('Participant not found')
+
+    // In a real implementation, verify the payment with the payment gateway
+    // For now, just check if payment status is already completed
+    if (participant.paymentStatus === 'COMPLETED') {
+      return {
+        verified: true,
+        status: 'COMPLETED'
+      }
+    }
+
+    // Update payment status to completed
+    await prisma.participant.update({
+      where: { id: participant.id },
+      data: {
+        paymentStatus: 'COMPLETED',
+        paymentDate: new Date()
+      }
+    })
+
+    // Generate reference code if not exists
+    if (!participant.referenceCode) {
+      const referenceCode = await generateParticipantReference()
+      await prisma.participant.update({
+        where: { id: participant.id },
+        data: { referenceCode }
+      })
+    }
+
+    revalidatePath('/participant/payment')
+    revalidatePath('/admin/payments')
+    return {
+      verified: true,
+      status: 'COMPLETED'
+    }
+  } catch (error) {
+    console.error('Error verifying registration payment:', error)
+    return {
+      verified: false,
+      error: error instanceof Error ? error.message : 'Payment verification failed'
+    }
+  }
+}
+
+export async function verifyHotelBookingPayment(): Promise<PaymentVerificationResult> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    const booking = await query(
+      `SELECT id, status, payment_status 
+       FROM bookings 
+       WHERE user_id = $1 
+       AND status = 'pending' 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [session.user.id]
+    )
+
+    if (!booking.rows[0]) throw new Error('No pending hotel booking found')
+
+    // In a real implementation, verify the payment with payment gateway
+    // For now, just update status to confirmed
+    await query(
       `UPDATE bookings 
-       SET payment_status = 'completed',
+       SET status = 'confirmed',
+           payment_status = 'completed',
            payment_date = NOW(),
            updated_at = NOW()
        WHERE id = $1`,
-      [bookingId]
+      [booking.rows[0].id]
     )
-    
+
     revalidatePath('/participant/accommodation')
-    return { verified: true }
-  })
-}
-
-// Function to update payment status after WhatsApp proof submission
-export async function updateWhatsappProofStatus(phoneNumber: string) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) throw new Error('Unauthorized')
-  
-  try {
-    await query(
-      `UPDATE profiles 
-       SET payment_status = 'whatsapp_proof_submitted',
-           updated_at = NOW()
-       WHERE id = $1`,
-      [session.user.id]
-    )
-    
-    revalidatePath('/payment')
-    revalidatePath('/participant/dashboard')
-    revalidatePath('/admin/payments')
-    
-    return { success: true }
-  } catch (error: any) {
-    console.error('WhatsApp proof status update error:', error)
-    throw new Error('Failed to update payment status')
-  }
-}
-
-// Function for admins to get all payments with WhatsApp proof submissions
-export async function getWhatsappProofSubmissions() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.role || session.user.role !== 'admin') throw new Error('Unauthorized')
-  
-  try {
-    const result = await query(
-      `SELECT p.id, p.full_name, p.email, p.phone, p.payment_amount, p.payment_status
-       FROM profiles p 
-       WHERE p.payment_status = 'whatsapp_proof_submitted'
-       ORDER BY p.updated_at DESC`,
-      []
-    )
-    
-    return result.rows
+    revalidatePath('/admin/hotels')
+    return {
+      verified: true,
+      status: 'confirmed'  
+    }
   } catch (error) {
-    console.error('Error fetching WhatsApp proof submissions:', error)
-    throw error
+    console.error('Error verifying hotel booking payment:', error)
+    return {
+      verified: false,
+      error: error instanceof Error ? error.message : 'Payment verification failed'
+    }
   }
 }
 

@@ -1,90 +1,160 @@
-import type { NextAuthOptions } from 'next-auth'
+import { AuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { verifyCredentials } from './auth'
+import { PrismaClient } from '@prisma/client'
+import { compare } from 'bcryptjs'
 
-export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET,
-  session: {
-    strategy: 'jwt'
-  },
+const prisma = new PrismaClient()
+
+export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
-      name: 'credentials',
+      name: 'Credentials',
       credentials: {
-        identifier: { label: "Email/Phone", type: "text" },
+        identifier: { label: "Email or Phone", type: "text" },
         password: { label: "Password", type: "password" },
-        loginMethod: { label: "Login Method", type: "text" },
-        isAdmin: { label: "Is Admin", type: "text" }
+        isEmailLogin: { label: "Login Type", type: "text" }
       },
       async authorize(credentials) {
-        if (!credentials?.identifier || !credentials?.loginMethod) {
-          throw new Error('Missing credentials')
-        }
+        if (!credentials?.identifier) return null
 
-        const isEmailLogin = credentials.loginMethod === 'email'
-        const profile = await verifyCredentials(
-          credentials.identifier,
-          credentials.password || '',
-          isEmailLogin
-        )
+        try {
+          const isEmailLogin = credentials.isEmailLogin === 'true'
+          const where = isEmailLogin 
+            ? { email: credentials.identifier }
+            : { phone: credentials.identifier }
 
-        if (!profile) return null
+          // Find user with role-specific data
+          const user = await prisma.user.findUnique({
+            where,
+            include: {
+              participant: true,
+              validator: true,
+              admin: true
+            }
+          })
 
-        return {
-          id: profile.id,
-          role: profile.role,
-          phone: profile.phone,
-          payment_status: profile.payment_status,
-          accreditation_status: profile.accreditation_status,
-          state: profile.state || '',
-          lga: profile.lga || '',
-          chapter: profile.chapter || '',
-          organization: profile.organization || '',
-          position: profile.position || '',
-          full_name: profile.full_name,
-          email: profile.email,
-          image: profile.avatar_url
+          if (!user) return null
+
+          const baseUser = {
+            id: user.id,
+            email: user.email,
+            name: user.fullName,
+            full_name: user.fullName,  // Add required field
+            role: user.role,
+            phone: user.phone,
+            position: user.participant?.position || '',  // Add required field
+            state: user.participant?.state || '',
+            lga: user.participant?.lga || '',
+            chapter: user.participant?.chapter || '',
+            organization: user.participant?.organization || '',
+            payment_status: 'PENDING',
+            accreditation_status: 'PENDING'
+          }
+
+          if (user.participant) {
+            baseUser.payment_status = user.participant.paymentStatus
+            baseUser.accreditation_status = user.participant.accreditationStatus
+          }
+
+          // For regular participants, allow phone-only login
+          if (!credentials.password && user.role === 'PARTICIPANT') {
+            return baseUser
+          }
+
+          // For admin/validator, require password
+          const isValid = await compare(credentials.password, user.password)
+          if (!isValid) return null
+
+          return baseUser
+        } catch (error) {
+          console.error('Auth error:', error)
+          return null
         }
       }
     })
   ],
-  pages: {
-    signIn: '/login',
-    error: '/login'
-  },
   callbacks: {
-    jwt: async ({ token, user }) => {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
         token.role = user.role
         token.phone = user.phone
         token.payment_status = user.payment_status
         token.accreditation_status = user.accreditation_status
-        token.state = user.state
-        token.lga = user.lga
-        token.chapter = user.chapter
-        token.organization = user.organization
-        token.position = user.position
-        token.full_name = user.full_name
       }
       return token
     },
-    session: async ({ session, token }) => {
-      if (token) {
-        session.user.id = token.id
-        session.user.role = token.role
-        session.user.phone = token.phone
-        session.user.payment_status = token.payment_status
-        session.user.accreditation_status = token.accreditation_status
-        session.user.state = token.state
-        session.user.lga = token.lga
-        session.user.chapter = token.chapter
-        session.user.organization = token.organization
-        session.user.position = token.position
-        session.user.full_name = token.full_name
+    async session({ session, token }) {
+      if (session.user && token) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.phone = token.phone as string
+        session.user.payment_status = token.payment_status as string
+        session.user.accreditation_status = token.accreditation_status as string
       }
       return session
     }
+  },
+  pages: {
+    signIn: '/login',
+    error: '/login'
+  },
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60 // 30 days
+  }
+}
+
+// Custom auth helpers
+export async function isAdmin(userId: string) {
+  const admin = await prisma.admin.findFirst({
+    where: { userId }
+  })
+  return !!admin
+}
+
+export async function isValidator(userId: string) {
+  const validator = await prisma.validator.findFirst({
+    where: { userId }
+  })
+  return !!validator
+}
+
+export async function isParticipant(userId: string) {
+  const participant = await prisma.participant.findFirst({
+    where: { userId }
+  })
+  return !!participant
+}
+
+// Extend next-auth types
+declare module "next-auth" {
+  interface User {
+    id: string
+    role: string
+    phone: string
+    payment_status: string
+    accreditation_status: string
+  }
+
+  interface Session {
+    user: User & {
+      id: string
+      role: string
+      phone: string
+      payment_status: string
+      accreditation_status: string
+    }
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string
+    role: string
+    phone: string
+    payment_status: string
+    accreditation_status: string
   }
 }
 

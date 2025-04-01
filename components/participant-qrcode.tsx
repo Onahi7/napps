@@ -94,8 +94,8 @@ export default function ParticipantQRCode() {
         <main className="flex-1 p-6">
           <Card className="mx-auto max-w-md border-napps-green/20 dark:border-napps-green/30 card-glow">
             <CardHeader className="text-center">
-              <CardTitle>Your Conference Identification</CardTitle>
-              <CardDescription>Use this for accreditation and meal validation</CardDescription>
+              <CardTitle>QR Code</CardTitle>
+              <CardDescription>Use this for accreditation and access validation</CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="qrcode" onValueChange={setActiveTab} className="w-full">
@@ -128,7 +128,7 @@ export default function ParticipantQRCode() {
                     <h3 className="text-xl font-bold mb-2">Your Registered Phone</h3>
                     <p className="text-3xl font-bold text-napps-green mb-2">{session.user.phone}</p>
                     <p className="text-sm text-muted-foreground">
-                      Show this number to validators for accreditation and meal validation
+                      Show this number to validators for accreditation and event access
                     </p>
                   </div>
                 </TabsContent>
@@ -187,12 +187,8 @@ export default function ParticipantQRCode() {
                     <span>Conference Accreditation</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <Coffee className="h-4 w-4 text-napps-green" />
-                    <span>Breakfast Validation</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Coffee className="h-4 w-4 text-napps-green" />
-                    <span>Dinner Validation</span>
+                    <CheckSquare className="h-4 w-4 text-napps-green" />
+                    <span>Session Access</span>
                   </li>
                 </ul>
               </div>

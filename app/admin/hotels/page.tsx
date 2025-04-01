@@ -169,14 +169,20 @@ export default function AdminHotelsPage() {
         name: formData.name,
         description: formData.description,
         address: formData.address,
-        price_per_night: Number(formData.pricePerNight),
-        available_rooms: Number(formData.availableRooms),
-        amenities: formData.amenities.split(',').map(item => item.trim())
+        pricePerNight: Number(formData.pricePerNight),
+        priceCategory: formData.priceCategory as "ECONOMY" | "STANDARD" | "PREMIUM",
+        availableRooms: Number(formData.availableRooms),
+        amenities: formData.amenities.split(',').map(item => item.trim()),
+        distanceFromVenue: Number(formData.distanceFromVenue),
+        rating: Number(formData.rating),
+        contactPhone: formData.contactPhone,
+        contactWhatsapp: formData.contactWhatsapp,
+        isFeatured: formData.featured
       }
 
       if (imageFile) {
         // Handle image upload separately if needed
-        // Add image_url to hotelData after upload
+        // Add imageUrl to hotelData after upload
       }
 
       const result = await createHotel(hotelData)
@@ -192,7 +198,7 @@ export default function AdminHotelsPage() {
       } else {
         toast({
           title: "Error",
-          description: result.error || "Failed to add hotel",
+          description: (result as { error?: string }).error || "Failed to add hotel",
           variant: "destructive",
         })
       }
@@ -219,14 +225,20 @@ export default function AdminHotelsPage() {
         name: formData.name,
         description: formData.description,
         address: formData.address,
-        price_per_night: Number(formData.pricePerNight),
-        available_rooms: Number(formData.availableRooms),
-        amenities: formData.amenities.split(',').map(item => item.trim())
+        pricePerNight: Number(formData.pricePerNight),
+        priceCategory: formData.priceCategory as "ECONOMY" | "STANDARD" | "PREMIUM",
+        distanceFromVenue: Number(formData.distanceFromVenue),
+        rating: Number(formData.rating),
+        availableRooms: Number(formData.availableRooms),
+        amenities: formData.amenities.split(',').map(item => item.trim()),
+        contactPhone: formData.contactPhone,
+        contactWhatsapp: formData.contactWhatsapp,
+        isFeatured: formData.featured
       }
 
       if (imageFile) {
         // TODO: Handle image upload separately if needed
-        // hotelData.image_url = uploaded_image_url
+        // hotelData.imageUrl = imageUrl
       }
 
       const result = await updateHotel(selectedHotel.id, hotelData)

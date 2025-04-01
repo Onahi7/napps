@@ -308,9 +308,9 @@ export default function ParticipantAccreditation() {
                   <h3 className="font-medium mb-2 text-napps-gold">Accreditation Process</h3>
                   <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
                     <li>Visit the accreditation desk at the Main Hall Entrance</li>
-                    <li>Present your QR code or provide your registered phone number</li>
-                    <li>Collect your conference badge and materials</li>
-                    <li>Ensure your badge is worn at all times during the conference</li>
+                    <li>Present your accreditation QR code to a validator when requested</li>
+                    <li>Accreditation is required to access all conference sessions</li>
+                    <li>Your accreditation status will be updated once validated</li>
                   </ol>
                 </div>
                 <div className="rounded-md bg-napps-gold/10 p-4 border border-napps-gold/20">
@@ -335,7 +335,7 @@ export default function ParticipantAccreditation() {
                   <ul className="list-disc list-inside space-y-2 text-muted-foreground">
                     <li>Your badge must be worn visibly at all times during the conference</li>
                     <li>Lost badges can be replaced at the help desk for a fee</li>
-                    <li>Accreditation is required to access all conference sessions and meals</li>
+                    <li>Accreditation is required to access all conference sessions</li>
                   </ul>
                 </div>
               </div>

@@ -99,26 +99,22 @@ export default function ParticipantProfile() {
 
       setIsSaving(true)
       const result = await updateProfile({
-        full_name: `${profileData.firstName} ${profileData.lastName}`,
+        fullName: `${profileData.firstName} ${profileData.lastName}`,
         email: profileData.email,
         phone: profileData.phone,
         organization: profileData.organization,
-        bio: profileData.bio,
-        dietary_requirements: profileData.dietaryRequirements,
-        school_name: profileData.schoolName,
-        school_address: profileData.schoolAddress,
-        school_city: profileData.schoolCity,
-        school_state: profileData.schoolState,
-        school_type: profileData.schoolType,
-        napps_position: profileData.nappsPosition,
-        napps_chapter: profileData.nappsChapter
+        position: profileData.nappsPosition,
+        dietaryRequirements: profileData.dietaryRequirements,
+        chapter: profileData.nappsChapter,
+        state: profileData.schoolState,
+        lga: profileData.schoolCity
       })
 
       if (result.success) {
         toast.success("Profile updated successfully")
         window.location.reload()
       } else {
-        toast.error(result.error || "Failed to update profile")
+        toast.error("Failed to update profile")
       }
     } catch (error: any) {
       toast.error(error.message || "An error occurred")

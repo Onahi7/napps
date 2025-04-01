@@ -1,100 +1,186 @@
+import { Prisma } from '@prisma/client'
+
+// Helper type to convert enums to union types
+type EnumToUnion<T> = T[keyof T]
+
+// Auth and User types
+export type UserRole = 'PARTICIPANT' | 'VALIDATOR' | 'ADMIN'
+
 export interface User {
-  id: string;
-  email: string;
-  password_hash: string;
-  created_at: Date;
-  updated_at: Date;
+  id: string
+  email: string
+  password: string
+  fullName: string
+  phone: string
+  role: UserRole
+  createdAt: Date
+  updatedAt: Date
+  participant?: Participant
+  validator?: Validator
+  admin?: Admin
 }
 
-export interface Profile {
-  id: string;
-  email: string;
-  full_name: string;
-  phone: string;
-  role: 'admin' | 'validator' | 'participant';
-  state?: string;
-  lga?: string;
-  chapter?: string;
-  organization?: string;
-  position?: string;
-  avatar_url?: string;
-  payment_status: 'pending' | 'completed';
-  payment_reference?: string;
-  payment_amount?: number;
-  payment_date?: Date;
-  accreditation_status: 'pending' | 'completed';
-  accreditation_date?: Date;
-  qr_code?: string;
-  unique_id?: string;
-  bio?: string;
-  dietary_requirements?: string;
-  school_name?: string;
-  school_address?: string;
-  school_city?: string;
-  school_state?: string;
-  school_type?: string;
-  napps_position?: string;
-  napps_chapter?: string;
-  created_at: Date;
-  updated_at: Date;
+// Participant types
+export type PaymentStatus = 'PENDING' | 'PROOF_SUBMITTED' | 'COMPLETED'
+export type AccredStatus = 'PENDING' | 'COMPLETED' | 'DECLINED'
+
+export interface Participant {
+  id: string
+  userId: string
+  user: User
+  state: string
+  lga: string
+  chapter?: string
+  organization?: string
+  position?: string
+  paymentStatus: PaymentStatus
+  paymentProof?: string
+  paymentAmount?: number
+  paymentDate?: Date
+  accreditationStatus: AccredStatus
+  accreditationDate?: Date
+  qrCode?: string
+  referenceCode?: string
+  accommodation?: Accommodation
+  resourceAccesses: ResourceAccess[]
+  scans: Scan[]
+  dietaryRequirements?: string
 }
 
-export interface Config {
-  id: string;
-  key: string;
-  value: any;
-  description?: string;
-  created_at: Date;
+// Event types
+export type EventType = 'SESSION' | 'BREAK' | 'REGISTRATION' | 'SPECIAL'
+
+export interface ScheduleEvent {
+  id: string
+  title: string
+  description?: string
+  day: number
+  startTime: string
+  endTime: string
+  venue?: string
+  type: EventType
+  speakers: string[]
 }
 
-export interface Booking {
-  id: string;
-  user_id: string;
-  hotel_id: string;
-  check_in_date: Date;
-  check_out_date: Date;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  payment_reference?: string;
-  payment_status: 'pending' | 'completed';
-  total_amount: number;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface Hotel {
-  id: string;
-  name: string;
-  description?: string;
-  address?: string;
-  price_per_night: number;
-  image_url?: string;
-  available_rooms: number;
-  amenities?: any[];
-  created_at: Date;
-  updated_at: Date;
-}
+// Resource types
+export type ResourceType = 'DOCUMENT' | 'VIDEO' | 'PRESENTATION' | 'OTHER'
+export type AccessType = 'VIEW' | 'DOWNLOAD'
 
 export interface Resource {
-  id: string;
-  title: string;
-  description?: string;
-  file_url: string;
-  type?: string;
-  is_public: boolean;
-  created_at: Date;
-  updated_at: Date;
+  id: string
+  title: string
+  type: ResourceType
+  url: string
+  description?: string
+  isPublic: boolean
+  createdAt: Date
+  accesses: ResourceAccess[]
 }
+
+export interface ResourceAccess {
+  id: string
+  participantId: string
+  participant: Participant
+  resourceId: string
+  resource: Resource
+  accessType: AccessType
+  accessedAt: Date
+}
+
+// Accommodation types
+export type PriceCategory = 'ECONOMY' | 'STANDARD' | 'PREMIUM'
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
+
+export interface Hotel {
+  id: string
+  name: string
+  description?: string
+  address?: string
+  pricePerNight: number
+  priceCategory: PriceCategory
+  imageUrl?: string
+  availableRooms: number
+  distanceFromVenue?: number
+  rating?: number
+  amenities: string[]
+  contactPhone?: string
+  contactWhatsapp?: string
+  isFeatured: boolean
+  createdAt: Date
+  updatedAt: Date
+  accommodations: Accommodation[]
+}
+
+export interface Accommodation {
+  id: string
+  participantId: string
+  participant: Participant
+  hotelId: string
+  hotel: Hotel
+  checkInDate: Date
+  checkOutDate: Date
+  bookingStatus: BookingStatus
+  paymentStatus: PaymentStatus
+  paymentReference?: string
+  totalAmount: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Validator and Admin types
+export interface Validator {
+  id: string
+  userId: string
+  user: User
+  scans: Scan[]
+  assignments: Assignment[]
+}
+
+export interface Admin {
+  id: string
+  userId: string
+  user: User
+}
+
+// Scan and Assignment types
+export type ScanType = 'CHECK_IN'
+export type AssignmentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'
 
 export interface Scan {
-  id: string;
-  user_id: string;
-  scanned_by: string;
-  scan_type: 'accreditation' | 'attendance';
-  location?: string;
-  notes?: string;
-  created_at: Date;
+  id: string
+  participantId: string
+  participant: Participant
+  validatorId: string
+  validator: Validator
+  type: ScanType
+  location?: string
+  notes?: string
+  scannedAt: Date
 }
 
+export interface Assignment {
+  id: string
+  validatorId: string
+  validator: Validator
+  location: string
+  date: Date
+  startTime: string
+  endTime: string
+  type: ScanType
+  status: AssignmentStatus
+}
+
+// System Config type
+export interface Config {
+  id: string
+  key: string
+  value: any
+  description?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Database monitoring types
 export interface DbMetrics {
   totalConnections: number;
   activeConnections: number;
@@ -109,3 +195,26 @@ export interface PoolState {
   idleCount: number;
   waitingCount: number;
 }
+
+// Prisma include types for common queries
+export const ParticipantWithUser = Prisma.validator<Prisma.ParticipantDefaultArgs>()({
+  include: { user: true }
+})
+
+export const ValidatorWithUser = Prisma.validator<Prisma.ValidatorDefaultArgs>()({
+  include: { user: true }
+})
+
+export const HotelWithAccommodations = Prisma.validator<Prisma.HotelDefaultArgs>()({
+  include: { accommodations: true }
+})
+
+export const ResourceWithAccesses = Prisma.validator<Prisma.ResourceDefaultArgs>()({
+  include: { accesses: true }
+})
+
+// Type helpers
+export type ParticipantWithUserType = Prisma.ParticipantGetPayload<typeof ParticipantWithUser>
+export type ValidatorWithUserType = Prisma.ValidatorGetPayload<typeof ValidatorWithUser>
+export type HotelWithAccommodationsType = Prisma.HotelGetPayload<typeof HotelWithAccommodations>
+export type ResourceWithAccessesType = Prisma.ResourceGetPayload<typeof ResourceWithAccesses>

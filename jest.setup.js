@@ -1,33 +1,17 @@
 import '@testing-library/jest-dom';
 
-// Mock next/navigation
 jest.mock('next/navigation', () => ({
-  useRouter() {
-    return {
-      push: jest.fn(),
-      replace: jest.fn(),
-      prefetch: jest.fn(),
-      back: jest.fn(),
-    };
-  },
-  useSearchParams() {
-    return new URLSearchParams();
-  },
-  usePathname() {
-    return '';
-  },
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    pathname: '',
+  }),
+  usePathname: () => '',
 }));
 
-// Mock Next Authentication
-jest.mock('next-auth/react', () => ({
-  useSession() {
-    return { data: null, status: 'unauthenticated' };
-  },
+// Mock ResizeObserver since it's not available in jsdom
+global.ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
 }));
-
-// Mock environment variables
-process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
-process.env.NEXTAUTH_URL = 'http://localhost:3000';
-
-// Suppress console errors during tests
-console.error = jest.fn();

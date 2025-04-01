@@ -11,15 +11,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Calendar } from "@/components/ui/calendar"
 import { useAuth } from "@/lib/auth-hooks"
-import { Calendar, CheckCircle, Clock, Coffee, FileDown, Search, User, XCircle } from "lucide-react"
+import { CheckCircle, Clock, History, RotateCw, LayoutGrid, List } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Scan } from "@/lib/database.types"
 import { getScanHistory } from "@/actions/scan-actions"
+import { cn } from "@/lib/utils"
 
 interface ValidationRecord {
   id: string
@@ -31,13 +34,43 @@ interface ValidationRecord {
   email?: string
   phone?: string
   reason?: string
+  location: string
+}
+
+interface ScanRecord {
+  id: string
+  full_name: string
+  created_at: Date
+  type: string
+  location: string | null
+}
+
+// Add ViewToggle component
+function ViewToggle({ current, onChange }: { current: "list" | "grid", onChange: (view: "list" | "grid") => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant={current === "list" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onChange("list")}
+      >
+        <List className="h-4 w-4" />
+      </Button>
+      <Button
+        variant={current === "grid" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onChange("grid")}
+      >
+        <LayoutGrid className="h-4 w-4" />
+      </Button>
+    </div>
+  )
 }
 
 export default function ValidatorHistory() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterType, setFilterType] = useState("all")
   const [filterDay, setFilterDay] = useState("all")
   const [viewMode, setViewMode] = useState<"list" | "grid">("list")
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -54,29 +87,29 @@ export default function ValidatorHistory() {
       const records = scans.map((scan): ValidationRecord => ({
         id: scan.id,
         name: scan.full_name,
-        type: scan.scan_type,
+        type: scan.type,
         date: new Date(scan.created_at).toLocaleDateString('en-US', {
+          year: 'numeric',
           month: 'short',
           day: 'numeric'
         }),
         time: new Date(scan.created_at).toLocaleTimeString('en-US', {
-          hour: 'numeric',
+          hour: '2-digit',
           minute: '2-digit'
         }),
-        status: "success",
-        email: scan.email,
-        phone: scan.phone
+        status: 'completed',
+        location: scan.location || 'Main Hall'
       }))
 
       setValidationHistory(records)
+      setIsLoading(false)
     } catch (error) {
-      console.error("Error loading history:", error)
+      console.error('Error loading history:', error)
       toast({
         title: "Error",
         description: "Failed to load validation history",
         variant: "destructive"
       })
-    } finally {
       setIsLoading(false)
     }
   }
@@ -85,392 +118,139 @@ export default function ValidatorHistory() {
     loadHistory()
   }, [user?.id])
 
-  // Filter validations based on search term and filters
-  const filteredValidations = validationHistory.filter((validation) => {
-    const matchesSearch = validation.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = filterType === "all" || validation.type.toLowerCase() === filterType.toLowerCase()
-    const matchesDay = filterDay === "all" || validation.date === filterDay
+  // Filter validations based on search term and day
+  const filteredValidations = validationHistory.filter(validation => {
+    const matchesSearch = 
+      validation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      validation.location.toLowerCase().includes(searchTerm.toLowerCase())
 
-    return matchesSearch && matchesType && matchesDay
+    if (filterDay === 'all') return matchesSearch
+    if (filterDay === 'today') {
+      const today = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+      return matchesSearch && validation.date === today
+    }
+    return matchesSearch
   })
 
-  // Group validations by day
-  const validationsByDay = filteredValidations.reduce(
-    (acc, validation) => {
-      if (!acc[validation.date]) {
-        acc[validation.date] = []
-      }
-      acc[validation.date].push(validation)
-      return acc
-    },
-    {} as Record<string, ValidationRecord[]>,
-  )
-
-  // Calculate statistics
-  const totalValidations = validationHistory.length
-  const successfulValidations = validationHistory.filter((v) => v.status === "success").length
-  const failedValidations = validationHistory.filter((v) => v.status === "failed").length
-  const breakfastValidations = validationHistory.filter((v) => v.type === "breakfast").length
-  const dinnerValidations = validationHistory.filter((v) => v.type === "dinner").length
-
-  const handleRefresh = () => {
-    setIsRefreshing(true)
-    loadHistory().finally(() => {
-      setIsRefreshing(false)
-    })
-  }
-
-  if (isLoading) {
-    return (
-      <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr] bg-background">
-        <DashboardSidebar role="validator" />
-        <div className="flex flex-col">
-          <DashboardHeader role="validator" title="Validation History" />
-          <main className="flex-1 p-6">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <p className="text-muted-foreground">Loading validation history...</p>
-            </div>
-          </main>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr] bg-background">
+    <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
       <DashboardSidebar role="validator" />
       <div className="flex flex-col">
         <DashboardHeader role="validator" title="Validation History">
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-napps-green/30"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              Refresh
-            </Button>
-            <Button variant="outline" size="sm" className="border-napps-green/30">
-              <FileDown className="mr-2 h-4 w-4" />
-              Export CSV
+            <Button variant="outline" size="sm" onClick={loadHistory} disabled={isRefreshing}>
+              <RotateCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+              {isRefreshing ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
         </DashboardHeader>
-        <main className="flex-1 p-6">
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
-            <Card className="border-napps-green/20 dark:border-napps-green/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Validations</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalValidations}</div>
-                <p className="text-xs text-muted-foreground">All validations performed</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-napps-green/20 dark:border-napps-green/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {totalValidations > 0
-                    ? Math.round((successfulValidations / totalValidations) * 100)
-                    : 0}
-                  %
-                </div>
-                <p className="text-xs text-muted-foreground">Successful validations</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-napps-green/20 dark:border-napps-green/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Breakfast</CardTitle>
-                <div className="h-8 w-8 rounded-full bg-napps-green/10 flex items-center justify-center">
-                  <Coffee className="h-4 w-4 text-napps-green" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{breakfastValidations}</div>
-                <div className="flex items-center gap-2 mt-2">
-                  <Progress
-                    value={(breakfastValidations / totalValidations) * 100}
-                    className="h-1.5"
-                    indicatorClassName="bg-napps-green"
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {((breakfastValidations / totalValidations) * 100).toFixed(1)}%
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-napps-green/20 dark:border-napps-green/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Dinner</CardTitle>
-                <div className="h-8 w-8 rounded-full bg-napps-green/10 flex items-center justify-center">
-                  <Coffee className="h-4 w-4 text-napps-green" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{dinnerValidations}</div>
-                <div className="flex items-center gap-2 mt-2">
-                  <Progress
-                    value={(dinnerValidations / totalValidations) * 100}
-                    className="h-1.5"
-                    indicatorClassName="bg-napps-green"
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {((dinnerValidations / totalValidations) * 100).toFixed(1)}%
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+        
+        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search validations..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-[300px]"
+              />
+              <Select value={filterDay} onValueChange={setFilterDay}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Filter by day" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <ViewToggle current={viewMode} onChange={setViewMode} />
+            </div>
           </div>
 
-          {/* Search and Filter */}
-          <Card className="border-napps-green/20 dark:border-napps-green/30 mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Search and Filter</CardTitle>
-                  <CardDescription>Find specific validation records</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 border-napps-green/30"
-                    onClick={() => setViewMode("list")}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`h-4 w-4 ${viewMode === "list" ? "text-napps-green" : "text-muted-foreground"}`}
-                    >
-                      <line x1="8" y1="6" x2="21" y2="6" />
-                      <line x1="8" y1="12" x2="21" y2="12" />
-                      <line x1="8" y1="18" x2="21" y2="18" />
-                      <line x1="3" y1="6" x2="3.01" y2="6" />
-                      <line x1="3" y1="12" x2="3.01" y2="12" />
-                      <line x1="3" y1="18" x2="3.01" y2="18" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 border-napps-green/30"
-                    onClick={() => setViewMode("grid")}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`h-4 w-4 ${viewMode === "grid" ? "text-napps-green" : "text-muted-foreground"}`}
-                    >
-                      <rect x="3" y="3" width="7" height="7" />
-                      <rect x="14" y="3" width="7" height="7" />
-                      <rect x="3" y="14" width="7" height="7" />
-                      <rect x="14" y="14" width="7" height="7" />
-                    </svg>
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name..."
-                      className="pl-8"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <TabsList className="bg-napps-green/10">
-                    <TabsTrigger value="all" onClick={() => setFilterType("all")}>
-                      All
-                    </TabsTrigger>
-                    <TabsTrigger value="breakfast" onClick={() => setFilterType("breakfast")}>
-                      Breakfast
-                    </TabsTrigger>
-                    <TabsTrigger value="dinner" onClick={() => setFilterType("dinner")}>
-                      Dinner
-                    </TabsTrigger>
-                  </TabsList>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Validation History */}
-          <Card className="border-napps-green/20 dark:border-napps-green/30">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Validation History</CardTitle>
-                <CardDescription>Complete history of your QR code validations</CardDescription>
-              </div>
-              <Button variant="outline" className="border-napps-green/30 text-napps-green hover:bg-napps-green/10">
-                <FileDown className="mr-2 h-4 w-4" />
-                Export CSV
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {Object.keys(validationsByDay).length === 0 ? (
+          {viewMode === "list" ? (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Participant</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredValidations.map((validation) => (
+                    <TableRow key={validation.id}>
+                      <TableCell>{validation.name}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span>{validation.date}</span>
+                          <span className="text-sm text-muted-foreground">{validation.time}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{validation.location}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={validation.status === "completed" ? "default" : "secondary"}
+                          className={validation.status === "completed" ? "bg-green-500" : ""}
+                        >
+                          <CheckCircle className="mr-1 h-3 w-3" />
+                          {validation.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {filteredValidations.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8">
-                  <Calendar className="h-12 w-12 text-muted-foreground" />
+                  <History className="h-12 w-12 text-muted-foreground" />
                   <h3 className="mt-4 text-lg font-medium">No validations found</h3>
                   <p className="text-sm text-muted-foreground">
-                    No validation records match your search criteria
+                    {searchTerm ? "Try a different search term" : "No validation records match the selected filter"}
                   </p>
                 </div>
-              ) : (
-                <Tabs defaultValue={Object.keys(validationsByDay)[0]} className="w-full">
-                  <TabsList className="bg-napps-green/10 dark:bg-napps-green/20 w-full justify-start mb-4">
-                    {Object.keys(validationsByDay).map((day) => (
-                      <TabsTrigger
-                        key={day}
-                        value={day}
-                        className="data-[state=active]:bg-napps-green data-[state=active]:text-white"
-                      >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {day}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-
-                  {Object.entries(validationsByDay).map(([day, validations]) => (
-                    <TabsContent key={day} value={day}>
-                      {viewMode === "list" ? (
-                        <div className="rounded-md border border-napps-green/20">
-                          {validations.map((validation) => (
-                            <div
-                              key={validation.id}
-                              className="grid grid-cols-5 border-b border-napps-green/20 p-3 last:border-0 hover:bg-napps-green/5 transition-colors"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 rounded-full bg-napps-green/10 flex items-center justify-center">
-                                  <User className="h-4 w-4 text-napps-green" />
-                                </div>
-                                <span>{validation.name}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <Badge variant={validation.type === "breakfast" ? "default" : "secondary"}>
-                                  {validation.type}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                {validation.time}
-                              </div>
-                              <div>
-                                {validation.status === "success" ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="bg-green-500/10 text-green-500 border-green-500/30"
-                                  >
-                                    <CheckCircle className="mr-1 h-3 w-3" />
-                                    Success
-                                  </Badge>
-                                ) : (
-                                  <Badge
-                                    variant="outline"
-                                    className="bg-red-500/10 text-red-500 border-red-500/30"
-                                  >
-                                    <XCircle className="mr-1 h-3 w-3" />
-                                    Failed
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center justify-end gap-2">
-                                <Button variant="ghost" size="sm">
-                                  View Details
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                          {validations.map((validation) => (
-                            <Card
-                              key={validation.id}
-                              className="border-napps-green/20 hover:border-napps-green/50 transition-colors"
-                            >
-                              <CardHeader className="pb-2">
-                                <div className="flex justify-between items-center">
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-8 w-8 rounded-full bg-napps-green/10 flex items-center justify-center">
-                                      <User className="h-4 w-4 text-napps-green" />
-                                    </div>
-                                    <CardTitle className="text-base">{validation.name}</CardTitle>
-                                  </div>
-                                  {validation.status === "success" ? (
-                                    <Badge
-                                      variant="outline"
-                                      className="bg-green-500/10 text-green-500 border-green-500/30"
-                                    >
-                                      <CheckCircle className="mr-1 h-3 w-3" />
-                                      Success
-                                    </Badge>
-                                  ) : (
-                                    <Badge
-                                      variant="outline"
-                                      className="bg-red-500/10 text-red-500 border-red-500/30"
-                                    >
-                                      <XCircle className="mr-1 h-3 w-3" />
-                                      Failed
-                                    </Badge>
-                                  )}
-                                </div>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Type:</span>
-                                    <Badge variant={validation.type === "breakfast" ? "default" : "secondary"}>
-                                      {validation.type}
-                                    </Badge>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Time:</span>
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3 text-muted-foreground" />
-                                      {validation.time}
-                                    </span>
-                                  </div>
-                                  {validation.status === "failed" && (
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-sm text-muted-foreground">Reason:</span>
-                                      <span className="text-sm text-red-500">{validation.reason}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                    </TabsContent>
-                  ))}
-                </Tabs>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredValidations.map((validation) => (
+                <Card key={validation.id} className="flex flex-col">
+                  <CardHeader className="flex-row items-start justify-between space-y-0">
+                    <div className="space-y-1">
+                      <CardTitle>{validation.name}</CardTitle>
+                      <CardDescription>{validation.location}</CardDescription>
+                    </div>
+                    <Badge
+                      variant={validation.status === "completed" ? "default" : "secondary"}
+                      className={validation.status === "completed" ? "bg-green-500" : ""}
+                    >
+                      <CheckCircle className="mr-1 h-3 w-3" />
+                      {validation.status}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                      <div className="flex items-center">
+                        <Calendar className="mr-1 h-4 w-4" />
+                        {validation.date}
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="mr-1 h-4 w-4" />
+                        {validation.time}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </main>
       </div>
     </div>

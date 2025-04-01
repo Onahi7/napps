@@ -48,18 +48,18 @@ export function ParticipantDashboard() {
         const [amount, details, participantStatus] = await Promise.all([
           getRegistrationAmount(),
           getConferenceDetails(),
-          getParticipantStatus(user?.id)
+          getParticipantStatus()
         ])
         
         setRegistrationAmount(amount)
         setConferenceDetails(details)
         if (participantStatus) {
           setStatus({
-            payment: participantStatus.payment as PaymentStatus,
-            accreditation: participantStatus.accreditation as AccreditationStatus,
-            accommodation: participantStatus.accommodation as AccommodationStatus
+            payment: participantStatus.paymentStatus as PaymentStatus,
+            accreditation: participantStatus.accreditationStatus as AccreditationStatus,
+            accommodation: "not_booked" as AccommodationStatus // Fallback since this isn't provided by the API
           })
-          setPaymentProof(participantStatus.payment_proof)
+          setPaymentProof(null) // Payment proof will need to be added to the API response if needed
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error)

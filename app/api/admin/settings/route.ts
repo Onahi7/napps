@@ -2,7 +2,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
-import { getConferenceDetails, updateConferenceDetails } from '@/lib/config-service'
+import { query, withTransaction } from '@/lib/db'
+import { revalidatePath } from 'next/cache'
+
+interface ConferenceConfig {
+  name: string;
+  date: string;
+  venue: string;
+  theme: string;
+  registrationOpen: boolean;
+  maxParticipants: number;
+  registrationFee: number;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  contactEmail: string;
+  description: string;
+}
+
+interface SystemConfig {
+  maintenanceMode: boolean;
+  debugMode: boolean;
+  analyticsEnabled: boolean;
+  fileUploadLimit: number;
+  defaultResourceVisibility: "public" | "private";
+  resourceCategories: string[];
+  emailNotifications: boolean;
+  timezone: string;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,8 +50,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const details = await getConferenceDetails()
-    return NextResponse.json(details)
+    const result = await query('SELECT * FROM config')
+    const settings = result.rows.reduce((acc: any, row) => {
+      try {
+        acc[row.key] = JSON.parse(row.value)
+      } catch {
+        acc[row.key] = row.value
+      }
+      return acc
+    }, {})
+
+    return NextResponse.json(settings)
   } catch (error: any) {
     console.error('Error fetching settings:', error)
     return NextResponse.json(
@@ -53,8 +89,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const settings = await request.json()
-    await updateConferenceDetails(settings)
+    const { conference, system } = await request.json()
+
+    await withTransaction(async (client) => {
+      // Update conference settings
+      await client.query(
+        `INSERT INTO config (key, value)
+         VALUES ('conference', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [JSON.stringify(conference)]
+      )
+
+      // Update system settings
+      await client.query(
+        `INSERT INTO config (key, value)
+         VALUES ('system', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [JSON.stringify(system)]
+      )
+    })
+
+    // Revalidate all pages that might use these settings
+    revalidatePath('/admin/settings')
+    revalidatePath('/admin/resources')
+    revalidatePath('/participant/resources')
+    revalidatePath('/')
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

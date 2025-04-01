@@ -1,0 +1,223 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  password      String
+  fullName      String
+  phone         String      @unique
+  role          UserRole    @default(PARTICIPANT)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  participant   Participant?
+  validator     Validator?
+  admin         Admin?
+}
+
+enum UserRole {
+  PARTICIPANT
+  VALIDATOR
+  ADMIN
+}
+
+model Participant {
+  id                  String            @id @default(cuid())
+  userId              String            @unique
+  user                User              @relation(fields: [userId], references: [id])
+  state               String
+  lga                 String
+  chapter             String?
+  organization        String?
+  position            String?
+  paymentStatus       PaymentStatus     @default(PENDING)
+  paymentProof        String?
+  paymentAmount       Float?
+  paymentDate        DateTime?
+  accreditationStatus AccredStatus      @default(PENDING)
+  accreditationDate   DateTime?
+  qrCode              String?           @unique
+  referenceCode       String?           @unique
+  accommodation       Accommodation?
+  resourceAccesses    ResourceAccess[]
+  scans              Scan[]
+}
+
+enum PaymentStatus {
+  PENDING
+  PROOF_SUBMITTED
+  COMPLETED
+}
+
+enum AccredStatus {
+  PENDING
+  COMPLETED
+  DECLINED
+}
+
+model Validator {
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id])
+  scans       Scan[]
+  assignments Assignment[]
+}
+
+model Admin {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model ScheduleEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  day         Int
+  startTime   String
+  endTime     String
+  venue       String?
+  type        EventType
+  speakers    String[]
+}
+
+enum EventType {
+  SESSION
+  BREAK
+  REGISTRATION
+  SPECIAL
+}
+
+model Resource {
+  id          String           @id @default(cuid())
+  title       String
+  type        ResourceType
+  url         String
+  description String?
+  isPublic    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  accesses    ResourceAccess[]
+}
+
+enum ResourceType {
+  DOCUMENT
+  VIDEO
+  PRESENTATION
+  OTHER
+}
+
+model ResourceAccess {
+  id            String     @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id])
+  resourceId    String
+  resource      Resource    @relation(fields: [resourceId], references: [id])
+  accessType    AccessType
+  accessedAt    DateTime    @default(now())
+
+  @@unique([participantId, resourceId, accessType])
+}
+
+enum AccessType {
+  VIEW
+  DOWNLOAD
+}
+
+model Hotel {
+  id                String           @id @default(cuid())
+  name              String
+  description       String?
+  address           String?
+  pricePerNight     Float
+  priceCategory     PriceCategory
+  imageUrl          String?
+  availableRooms    Int             @default(0)
+  distanceFromVenue Float?
+  rating            Float?
+  amenities         String[]
+  contactPhone      String?
+  contactWhatsapp   String?
+  isFeatured        Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  accommodations    Accommodation[]
+}
+
+enum PriceCategory {
+  ECONOMY
+  STANDARD
+  PREMIUM
+}
+
+model Accommodation {
+  id            String             @id @default(cuid())
+  participantId String             @unique
+  participant   Participant        @relation(fields: [participantId], references: [id])
+  hotelId       String
+  hotel         Hotel              @relation(fields: [hotelId], references: [id])
+  checkInDate   DateTime
+  checkOutDate  DateTime
+  bookingStatus BookingStatus      @default(PENDING)
+  paymentStatus PaymentStatus      @default(PENDING)
+  paymentReference String?         @unique
+  totalAmount   Float
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model Scan {
+  id            String     @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id])
+  validatorId   String
+  validator     Validator   @relation(fields: [validatorId], references: [id])
+  type          ScanType
+  location      String?
+  notes         String?
+  scannedAt     DateTime    @default(now())
+}
+
+enum ScanType {
+  CHECK_IN
+  SESSION
+}
+
+model Assignment {
+  id          String           @id @default(cuid())
+  validatorId String
+  validator   Validator        @relation(fields: [validatorId], references: [id])
+  location    String
+  date        DateTime
+  startTime   String
+  endTime     String
+  type        ScanType
+  status      AssignmentStatus @default(PENDING)
+}
+
+enum AssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Config {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       Json
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

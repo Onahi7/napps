@@ -5,9 +5,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Check, X, MessageSquare, CheckCircle } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Check, X, CheckCircle, Clock, AlertCircle, Loader2, FileText } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import Image from "next/image"
+import { AspectRatio } from "@/components/ui/aspect-ratio"
 
 interface PaymentSubmission {
   id: string
@@ -18,6 +20,7 @@ interface PaymentSubmission {
   payment_amount: number
   created_at: string
   self_verified?: boolean
+  payment_proof?: string | null
 }
 
 export function AdminPaymentReview() {
@@ -25,7 +28,6 @@ export function AdminPaymentReview() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
   const [processingId, setProcessingId] = useState<string | null>(null)
-  const [selfVerified, setSelfVerified] = useState<boolean>(false)
 
   useEffect(() => {
     fetchSubmissions()
@@ -65,7 +67,7 @@ export function AdminPaymentReview() {
         description: "Payment verified successfully"
       })
 
-      // Update the submission status instead of removing it
+      // Update the submission status
       setSubmissions(prev => prev.map(s => 
         s.phone === phone 
           ? { ...s, payment_status: 'completed' }
@@ -102,7 +104,7 @@ export function AdminPaymentReview() {
       // Update the submission status
       setSubmissions(prev => prev.map(s => 
         s.phone === phone 
-          ? { ...s, payment_status: 'pending' }
+          ? { ...s, payment_status: 'pending', payment_proof: null }
           : s
       ))
     } catch (error) {
@@ -117,23 +119,11 @@ export function AdminPaymentReview() {
     }
   }
 
-  const handleSelfVerify = async (phone: string) => {
-    // Always mark as success for self-verification
-    setSubmissions(prev => prev.map(s => 
-      s.phone === phone 
-        ? { ...s, self_verified: true, payment_status: 'proof_submitted' }
-        : s
-    ))
-    toast({
-      title: "Success",
-      description: "Your payment proof has been submitted successfully"
-    })
-  }
-
   if (loading) {
     return (
       <div className="p-6 text-center text-muted-foreground">
-        Loading submissions...
+        <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+        <p className="mt-2">Loading submissions...</p>
       </div>
     )
   }
@@ -151,19 +141,11 @@ export function AdminPaymentReview() {
       <Tabs defaultValue="all" className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="all">All Payments</TabsTrigger>
-          <TabsTrigger value="self-verified">
-            Self-Verified
-            {submissions.filter(s => s.self_verified).length > 0 && (
+          <TabsTrigger value="pending">
+            Pending Review
+            {submissions.filter(s => s.payment_status === 'proof_submitted').length > 0 && (
               <Badge variant="secondary" className="ml-2">
-                {submissions.filter(s => s.self_verified).length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="whatsapp">
-            WhatsApp Proofs
-            {submissions.filter(s => s.payment_status === 'whatsapp_proof_submitted').length > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {submissions.filter(s => s.payment_status === 'whatsapp_proof_submitted').length}
+                {submissions.filter(s => s.payment_status === 'proof_submitted').length}
               </Badge>
             )}
           </TabsTrigger>
@@ -172,168 +154,128 @@ export function AdminPaymentReview() {
         <TabsContent value="all">
           <div className="grid gap-4 md:grid-cols-2">
             {submissions.map((submission) => (
-              <Card key={submission.id}>
-                <CardContent className="pt-6">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{submission.full_name}</p>
-                        <p className="text-sm text-muted-foreground">{submission.phone}</p>
-                      </div>
-                      {submission.payment_status === 'completed' && (
-                        <Badge variant="default" className="gap-1">
-                          <CheckCircle className="h-3 w-3" />
-                          Verified
-                        </Badge>
-                      )}
-                      {submission.self_verified && (
-                        <Badge variant="secondary" className="gap-1">
-                          <Check className="h-3 w-3" />
-                          Self-Verified
-                        </Badge>
-                      )}
-                    </div>
-
-                    {!submission.self_verified && submission.payment_status !== 'completed' && (
-                      <Button
-                        variant="secondary"
-                        className="w-full"
-                        onClick={() => handleSelfVerify(submission.phone)}
-                      >
-                        I've sent my proof
-                      </Button>
-                    )}
-
-                    {(submission.self_verified || submission.payment_status === 'whatsapp_proof_submitted') && (
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1"
-                          onClick={() => handleVerify(submission.phone)}
-                          disabled={!!processingId}
-                        >
-                          <Check className="mr-1 h-4 w-4" />
-                          Approve
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => handleReject(submission.phone)}
-                          disabled={!!processingId}
-                        >
-                          <X className="mr-1 h-4 w-4" />
-                          Reject
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <SubmissionCard
+                key={submission.id}
+                submission={submission}
+                onVerify={handleVerify}
+                onReject={handleReject}
+                processing={processingId === submission.phone}
+              />
             ))}
           </div>
         </TabsContent>
 
-        <TabsContent value="self-verified">
+        <TabsContent value="pending">
           <div className="grid gap-4 md:grid-cols-2">
             {submissions
-              .filter(s => s.self_verified)
+              .filter(s => s.payment_status === 'proof_submitted')
               .map((submission) => (
-                <Card key={submission.id}>
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{submission.full_name}</p>
-                          <p className="text-sm text-muted-foreground">{submission.phone}</p>
-                        </div>
-                        <Badge variant="secondary" className="gap-1">
-                          <Check className="h-3 w-3" />
-                          Self-Verified
-                        </Badge>
-                      </div>
-
-                      <Alert>
-                        <AlertDescription>
-                          Participant has indicated they've sent payment proof
-                        </AlertDescription>
-                      </Alert>
-
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1"
-                          onClick={() => handleVerify(submission.phone)}
-                          disabled={!!processingId}
-                        >
-                          <Check className="mr-1 h-4 w-4" />
-                          Approve
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => handleReject(submission.phone)}
-                          disabled={!!processingId}
-                        >
-                          <X className="mr-1 h-4 w-4" />
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="whatsapp">
-          <div className="grid gap-4 md:grid-cols-2">
-            {submissions
-              .filter(s => s.payment_status === 'whatsapp_proof_submitted')
-              .map((submission) => (
-                <Card key={submission.id}>
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{submission.full_name}</p>
-                          <p className="text-sm text-muted-foreground">{submission.phone}</p>
-                        </div>
-                        <Badge variant="outline" className="gap-1">
-                          <MessageSquare className="h-3 w-3" />
-                          WhatsApp Proof
-                        </Badge>
-                      </div>
-
-                      <Alert>
-                        <AlertDescription>
-                          Please check WhatsApp for payment proof from this participant
-                        </AlertDescription>
-                      </Alert>
-
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1"
-                          onClick={() => handleVerify(submission.phone)}
-                          disabled={!!processingId}
-                        >
-                          <Check className="mr-1 h-4 w-4" />
-                          Approve
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => handleReject(submission.phone)}
-                          disabled={!!processingId}
-                        >
-                          <X className="mr-1 h-4 w-4" />
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <SubmissionCard
+                  key={submission.id}
+                  submission={submission}
+                  onVerify={handleVerify}
+                  onReject={handleReject}
+                  processing={processingId === submission.phone}
+                />
               ))}
           </div>
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+interface SubmissionCardProps {
+  submission: PaymentSubmission
+  onVerify: (phone: string) => void
+  onReject: (phone: string) => void
+  processing: boolean
+}
+
+function SubmissionCard({ submission, onVerify, onReject, processing }: SubmissionCardProps) {
+  return (
+    <Card key={submission.id}>
+      <CardContent className="pt-6">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">{submission.full_name}</p>
+              <p className="text-sm text-muted-foreground">{submission.phone}</p>
+            </div>
+            {submission.payment_status === 'completed' ? (
+              <Badge variant="default" className="gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Verified
+              </Badge>
+            ) : submission.payment_status === 'proof_submitted' ? (
+              <Badge variant="secondary" className="gap-1">
+                <Clock className="h-3 w-3" />
+                Pending Review
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Pending
+              </Badge>
+            )}
+          </div>
+
+          {submission.payment_proof && (
+            <div className="mt-2">
+              <Label className="mb-2 block">Payment Proof</Label>
+              {submission.payment_proof.endsWith('.pdf') ? (
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  onClick={() => {
+                    if (submission.payment_proof) {
+                      window.open(submission.payment_proof, '_blank')
+                    }
+                  }}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  View PDF
+                </Button>
+              ) : (
+                <AspectRatio ratio={16/9}>
+                  <Image
+                    src={submission.payment_proof}
+                    alt="Payment proof"
+                    fill
+                    className="rounded-md object-cover"
+                  />
+                </AspectRatio>
+              )}
+            </div>
+          )}
+
+          {submission.payment_status === 'proof_submitted' && (
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => onVerify(submission.phone)}
+                disabled={processing}
+              >
+                {processing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                Approve
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => onReject(submission.phone)}
+                disabled={processing}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Reject
+              </Button>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

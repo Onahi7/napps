@@ -1,178 +1,243 @@
 'use server'
 
-import { query, withTransaction } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { revalidatePath } from 'next/cache'
+import { PrismaClient } from '@prisma/client'
 
-export async function getHotels() {
-  const result = await query(
-    'SELECT * FROM hotels ORDER BY price_per_night ASC'
-  )
-  return result.rows
-}
-
-export async function getHotel(hotelId: string) {
-  const result = await query(
-    'SELECT * FROM hotels WHERE id = $1',
-    [hotelId]
-  )
-  return result.rows[0] || null
-}
+const prisma = new PrismaClient()
 
 export async function createHotel(data: {
   name: string
+  address: string
+  pricePerNight: number
+  priceCategory: 'ECONOMY' | 'STANDARD' | 'PREMIUM'
+  availableRooms: number
   description?: string
-  address?: string
-  price_per_night: number
-  image_url?: string
-  available_rooms?: number
-  amenities?: any[]
+  amenities?: string[]
+  contactPhone?: string
+  contactWhatsapp?: string
+  distanceFromVenue?: number
+  rating?: number
+  imageUrl?: string
+  isFeatured?: boolean
 }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const result = await query(
-    `INSERT INTO hotels (
-      name, description, address, price_per_night, 
-      image_url, available_rooms, amenities
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id`,
-    [
-      data.name,
-      data.description,
-      data.address,
-      data.price_per_night,
-      data.image_url,
-      data.available_rooms || 0,
-      JSON.stringify(data.amenities || [])
-    ]
-  )
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
 
-  revalidatePath('/admin/hotels')
-  return result.rows[0].id
+    const hotel = await prisma.hotel.create({
+      data: {
+        name: data.name,
+        address: data.address,
+        pricePerNight: data.pricePerNight,
+        priceCategory: data.priceCategory,
+        availableRooms: data.availableRooms,
+        description: data.description,
+        amenities: data.amenities || [],
+        contactPhone: data.contactPhone,
+        contactWhatsapp: data.contactWhatsapp,
+        distanceFromVenue: data.distanceFromVenue,
+        rating: data.rating,
+        imageUrl: data.imageUrl,
+        isFeatured: data.isFeatured
+      }
+    })
+
+    revalidatePath('/admin/hotels')
+    return { success: true, hotel }
+  } catch (error) {
+    console.error('Error creating hotel:', error)
+    throw error
+  }
 }
 
-export async function updateHotel(hotelId: string, data: {
+export async function updateHotel(id: string, data: {
   name?: string
-  description?: string
   address?: string
-  price_per_night?: number
-  image_url?: string
-  available_rooms?: number
-  amenities?: any[]
+  pricePerNight?: number
+  priceCategory?: 'ECONOMY' | 'STANDARD' | 'PREMIUM'
+  availableRooms?: number
+  description?: string
+  amenities?: string[]
+  contactPhone?: string
+  contactWhatsapp?: string
+  distanceFromVenue?: number
+  rating?: number
+  imageUrl?: string
+  isFeatured?: boolean
 }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const fields = Object.keys(data)
-  const values = Object.values(data)
-  const setClause = fields.map((field, i) => {
-    if (field === 'amenities') {
-      values[i] = JSON.stringify(values[i])
-    }
-    return `${field} = $${i + 2}`
-  }).join(', ')
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
 
-  await query(
-    `UPDATE hotels 
-     SET ${setClause}, updated_at = NOW()
-     WHERE id = $1`,
-    [hotelId, ...values]
-  )
+    await prisma.hotel.update({
+      where: { id },
+      data
+    })
 
-  revalidatePath('/admin/hotels')
-  return { success: true }
+    revalidatePath('/admin/hotels')
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating hotel:', error)
+    throw error
+  }
 }
 
-export async function deleteHotel(hotelId: string) {
+export async function deleteHotel(id: string) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  await query(
-    'DELETE FROM hotels WHERE id = $1',
-    [hotelId]
-  )
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Not an admin')
 
-  revalidatePath('/admin/hotels')
-  return { success: true }
-}
+    // Check if hotel has any accommodations
+    const accommodationsExist = await prisma.accommodation.findFirst({
+      where: { hotelId: id }
+    })
 
-export async function createBooking(hotelId: string, data: {
-  check_in_date: Date
-  check_out_date: Date
-  total_amount: number
-}) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) throw new Error('Unauthorized')
-
-  return await withTransaction(async (client) => {
-    // Check hotel availability
-    const hotel = await client.query(
-      'SELECT available_rooms FROM hotels WHERE id = $1',
-      [hotelId]
-    )
-
-    if (!hotel.rows[0] || hotel.rows[0].available_rooms < 1) {
-      throw new Error('No rooms available')
+    if (accommodationsExist) {
+      throw new Error('Cannot delete hotel with existing accommodations')
     }
 
-    // Create booking
-    const booking = await client.query(
-      `INSERT INTO bookings (
-        user_id, hotel_id, check_in_date, check_out_date, 
-        total_amount, status, payment_status
-      ) VALUES ($1, $2, $3, $4, $5, 'confirmed', 'pending')
-      RETURNING id`,
-      [
-        session.user.id,
-        hotelId,
-        data.check_in_date,
-        data.check_out_date,
-        data.total_amount
-      ]
-    )
+    // Delete hotel
+    await prisma.hotel.delete({
+      where: { id }
+    })
 
-    // Update hotel availability
-    await client.query(
-      'UPDATE hotels SET available_rooms = available_rooms - 1 WHERE id = $1',
-      [hotelId]
-    )
+    revalidatePath('/admin/hotels')
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting hotel:', error)
+    throw error
+  }
+}
 
-    revalidatePath('/participant/accommodation')
-    return booking.rows[0].id
-  })
+export async function getHotels() {
+  try {
+    const hotels = await prisma.hotel.findMany({
+      orderBy: { name: 'asc' }
+    })
+
+    return hotels
+  } catch (error) {
+    console.error('Error getting hotels:', error)
+    throw error
+  }
 }
 
 export async function getUserBookings() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const result = await query(
-    `SELECT b.*, h.name as hotel_name, h.address
-     FROM bookings b
-     JOIN hotels h ON b.hotel_id = h.id
-     WHERE b.user_id = $1
-     ORDER BY b.created_at DESC`,
-    [session.user.id]
-  )
+  try {
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!participant) throw new Error('Not a participant')
 
-  return result.rows
+    const bookings = await prisma.accommodation.findMany({
+      where: {
+        participantId: participant.id
+      },
+      include: {
+        hotel: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+
+    return bookings.map(booking => ({
+      id: booking.id,
+      hotelName: booking.hotel.name,
+      checkIn: booking.checkInDate.toISOString(),
+      checkOut: booking.checkOutDate.toISOString(),
+      status: booking.bookingStatus,
+      amount: booking.totalAmount
+    }))
+  } catch (error) {
+    console.error('Error getting user bookings:', error)
+    throw error
+  }
 }
 
-export async function getAllBookings() {
+export async function createBooking(data: {
+  hotelId: string
+  checkInDate: Date
+  checkOutDate: Date
+  amount: number
+}) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const result = await query(
-    `SELECT b.*, h.name as hotel_name, h.address,
-            p.full_name, p.email, p.phone
-     FROM bookings b
-     JOIN hotels h ON b.hotel_id = h.id
-     JOIN profiles p ON b.user_id = p.id
-     ORDER BY b.created_at DESC`
-  )
+  try {
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!participant) throw new Error('Not a participant')
 
-  return result.rows
+    const booking = await prisma.accommodation.create({
+      data: {
+        participantId: participant.id,
+        hotelId: data.hotelId,
+        checkInDate: data.checkInDate,
+        checkOutDate: data.checkOutDate,
+        totalAmount: data.amount,
+        bookingStatus: 'PENDING',
+        paymentStatus: 'PENDING'
+      }
+    })
+
+    revalidatePath('/participant/accommodation')
+    return booking.id
+  } catch (error) {
+    console.error('Error creating booking:', error)
+    throw error
+  }
+}
+
+export async function cancelHotelBooking(bookingId: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!participant) throw new Error('Not a participant')
+
+    const booking = await prisma.accommodation.findFirst({
+      where: {
+        id: bookingId,
+        participantId: participant.id
+      }
+    })
+    if (!booking) throw new Error('Booking not found')
+
+    await prisma.accommodation.update({
+      where: { id: bookingId },
+      data: { bookingStatus: 'CANCELLED' }
+    })
+
+    revalidatePath('/participant/accommodation')
+    return { success: true }
+  } catch (error) {
+    console.error('Error cancelling booking:', error)
+    throw error
+  }
 }
 

@@ -21,11 +21,30 @@ export class DatabaseMonitor {
 
   async checkHealth(): Promise<boolean> {
     try {
+      const startTime = Date.now();
       await this.pool.query('SELECT 1');
+      const duration = Date.now() - startTime;
+      
+      // Log connection successful with timing
+      console.log(`Database health check successful. Duration: ${duration}ms`);
+      
+      const { totalCount, idleCount, waitingCount } = this.pool;
+      console.log(`Pool status - Total: ${totalCount}, Idle: ${idleCount}, Waiting: ${waitingCount}`);
+      
       return true;
     } catch (err) {
       const error = err as Error;
-      console.error('Database health check failed:', error);
+      console.error('Database health check failed:', {
+        message: error.message,
+        code: (error as any).code,
+        name: error.name,
+        stack: error.stack,
+        poolStatus: {
+          totalConnections: this.pool.totalCount,
+          idleConnections: this.pool.idleCount,
+          waitingClients: this.pool.waitingCount
+        }
+      });
       return false;
     }
   }

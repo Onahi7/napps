@@ -3,6 +3,7 @@ const nextConfig = {
   // Disable image optimization in development
   images: {
     unoptimized: process.env.NODE_ENV === 'development',
+    domains: ['res.cloudinary.com']
   },
   // Enable production source maps
   productionBrowserSourceMaps: true,
@@ -45,8 +46,21 @@ const nextConfig = {
   // Handle larger file uploads
   experimental: {
     serverActions: {
-      bodySizeLimit: '6mb' // Slightly larger than our 5MB limit to account for encoding overhead
+      bodySizeLimit: '6mb'
     }
+  },
+  // Configure which routes use Node.js runtime
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Don't attempt to load these server-only modules on the client
+      config.resolve.fallback = {
+        fs: false,
+        net: false,
+        tls: false,
+        dns: false
+      }
+    }
+    return config
   }
 }
 

@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     return await withTransaction(async (client) => {
       // Get the user profile 
       const result = await client.query(
-        'SELECT * FROM profiles WHERE phone = $1',
+        'SELECT payment_status FROM profiles WHERE phone = $1',
         [phone]
       )
 
@@ -47,7 +47,15 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Update payment status
+      // Only allow verifying payments that have proof submitted
+      if (result.rows[0].payment_status !== 'proof_submitted') {
+        return NextResponse.json(
+          { error: 'Payment proof has not been submitted' },
+          { status: 400 }
+        )
+      }
+
+      // Update payment status to completed
       await client.query(
         `UPDATE profiles 
          SET payment_status = 'completed',

@@ -1,167 +1,139 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { Loader2, Copy, AlertCircle, MessageSquare } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Separator } from "@/components/ui/separator"
-import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { AlertCircle, Copy, Loader2 } from "lucide-react"
+import { Icons } from "@/components/icons"
 
 export default function PaymentPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const { toast } = useToast();
-  const [registrationAmount, setRegistrationAmount] = useState<number | null>(null);
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const router = useRouter()
+  const { data: session, status } = useSession()
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
 
-  useEffect(() => {
-    async function initialize() {
-      try {
-        const response = await fetch('/api/config/registration-amount');
-        const data = await response.json();
-        setRegistrationAmount(data.amount);
-      } catch (error) {
-        console.error('Error fetching registration amount:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load registration amount",
-          variant: "destructive"
-        });
-      } finally {
-        setLoadingConfig(false);
-      }
-    }
-    initialize();
-  }, [session, toast]);
-
-  const copyToClipboard = async (text: string) => {
+  const handleCopy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
-      toast({
-        title: "Copied!",
-        description: "Text copied to clipboard"
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to copy",
-        description: "Please copy manually",
-        variant: "destructive"
-      });
+      await navigator.clipboard.writeText(text)
+      setSuccessMessage("Text copied to clipboard")
+      setTimeout(() => setSuccessMessage(null), 2000)
+    } catch (err) {
+      setError("Failed to copy text")
+      setTimeout(() => setError(null), 2000)
     }
-  };
+  }
 
-  const handleSendProof = async () => {
-    setSubmitting(true);
-    setError(null);
+  const handleUploadProof = async () => {
+    if (!file) {
+      setError("Please select a file to upload")
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
     
     try {
-      const response = await fetch('/api/payment-proof', {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch('/api/upload-proof', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userPhone: session?.user?.phone })
-      });
+        body: formData
+      })
 
       if (!response.ok) {
-        throw new Error('Failed to submit payment notification');
+        throw new Error('Failed to upload payment proof')
       }
 
-      setSuccessMessage("Successfully notified admin. Redirecting to dashboard...");
+      setSuccessMessage("Payment proof uploaded successfully. Redirecting to dashboard...")
       
       setTimeout(() => {
-        router.refresh();
-        router.push("/participant/dashboard");
-      }, 2000);
+        router.refresh()
+        router.push("/participant/dashboard")
+      }, 2000)
 
     } catch (error: any) {
-      console.error("Error submitting payment notification:", error);
-      setError(error.message || "Failed to submit payment notification");
+      console.error("Error uploading payment proof:", error)
+      setError(error.message || "Failed to upload payment proof")
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
-  };
+  }
 
   // Protect the route
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
+      router.push('/login')
     }
-  }, [status, router]);
+  }, [status, router])
 
-  if (status === 'unauthenticated') return null;
-
-  if (status === 'loading' || loadingConfig) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-          <p className="mt-2">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  if (status === "loading") return null
 
   return (
-    <div className="container max-w-2xl py-8">
-      <div className="space-y-8">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="absolute right-4 top-4" />
+
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[400px]">
+        <div className="flex flex-col space-y-2 text-center">
+          <Icons.logo className="mx-auto h-12 w-12 text-napps-gold" />
+          <h1 className="text-2xl font-semibold tracking-tight">Payment Details</h1>
+          <p className="text-sm text-muted-foreground">Complete your registration payment</p>
+        </div>
+
         <Card>
           <CardHeader>
-            <CardTitle>Payment Information</CardTitle>
-            <CardDescription>
-              Please make a bank transfer of ₦{registrationAmount?.toLocaleString() ?? '0'} to the account below
-            </CardDescription>
+            <CardTitle>Bank Transfer Details</CardTitle>
+            <CardDescription>Make a transfer to the account below</CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4">
             <div className="space-y-4">
               <div>
-                <Label>Account Name</Label>
+                <p className="text-sm font-medium mb-1">Account Name</p>
                 <div className="flex items-center justify-between rounded-md border p-2">
-                  <span>N.A.P.P.S. Nassarawa State</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('N.A.P.P.S. Nassarawa State')}>
+                  <span>NAPPS UNITY BANK</span>
+                  <Button variant="ghost" size="sm" onClick={() => handleCopy("NAPPS UNITY BANK")}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
               <div>
-                <Label>Bank</Label>
-                <div className="flex items-center justify-between rounded-md border p-2">
-                  <span>Unity Bank</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('Unity Bank')}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <Label>Account Number</Label>
+                <p className="text-sm font-medium mb-1">Account Number</p>
                 <div className="flex items-center justify-between rounded-md border p-2">
                   <span>0017190877</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard('0017190877')}>
+                  <Button variant="ghost" size="sm" onClick={() => handleCopy("0017190877")}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
               <div>
-                <Label>Amount</Label>
+                <p className="text-sm font-medium mb-1">Bank</p>
                 <div className="flex items-center justify-between rounded-md border p-2">
-                  <span>₦{registrationAmount?.toLocaleString() ?? '0'}</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard(registrationAmount?.toString() ?? '0')}>
+                  <span>Unity Bank</span>
+                  <Button variant="ghost" size="sm" onClick={() => handleCopy("Unity Bank")}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-1">Amount</p>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>₦20,000</span>
+                  <Button variant="ghost" size="sm" onClick={() => handleCopy("20000")}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             </div>
-
-            <Separator />
 
             {error && (
               <Alert variant="destructive">
@@ -172,49 +144,50 @@ export default function PaymentPage() {
 
             {successMessage && (
               <Alert>
+                <AlertCircle className="h-4 w-4 text-green-500" />
                 <AlertDescription>{successMessage}</AlertDescription>
               </Alert>
             )}
 
-            <Alert className="important-alert">
+            <Alert>
               <AlertCircle className="h-4 w-4 text-napps-gold" />
               <AlertDescription className="alert-description mt-2">
-                After making the transfer, click the button below to send your payment proof via WhatsApp to {session?.user?.phone === "07011098119" ? "an alternative number" : <span className="whatsapp-bold">07011098119</span>}.
+                Please include your phone number ({session?.user?.phone}) in the transfer narration/reference. After payment, upload your proof below.
               </AlertDescription>
             </Alert>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Upload Payment Proof</p>
+              <Input 
+                type="file" 
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                accept="image/*,.pdf"
+              />
+              <p className="text-xs text-muted-foreground">
+                Accepted formats: Images (JPEG, PNG) and PDF. Maximum size: 5MB
+              </p>
+            </div>
           </CardContent>
 
           <CardFooter className="flex flex-col gap-4">
             <Button
               className="w-full"
-              onClick={() => {
-                const message = `Hello, I have made payment for NAPPS Summit registration.\n*Full Name:* ${session?.user?.full_name}\n*Phone:* ${session?.user?.phone}\n*Account Used:* Unity Bank - 0017190877`;
-                window.open(`https://wa.me/2347011098119?text=${encodeURIComponent(message)}`, '_blank');
-              }}
-              disabled={submitting}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Send Payment Proof on WhatsApp
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleSendProof}
-              disabled={submitting}
+              onClick={handleUploadProof}
+              disabled={submitting || !file}
             >
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting...
+                  Uploading...
                 </>
               ) : (
-                "I've sent the proof on WhatsApp"
+                "Upload Payment Proof"
               )}
             </Button>
           </CardFooter>
         </Card>
       </div>
     </div>
-  );
+  )
 }
 

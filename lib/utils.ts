@@ -10,21 +10,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export const fileUtils = {
   /**
-   * Generate a CDN URL for a file in the space
-   */
-  getCdnUrl(fileName: string, env: { DO_SPACES_BUCKET: string; DO_SPACES_REGION: string }): string {
-    return `https://${env.DO_SPACES_BUCKET}.${env.DO_SPACES_REGION}.cdn.digitaloceanspaces.com/${fileName}`;
-  },
-
-  /**
-   * Generate a direct URL for a file in the space (non-CDN)
-   */
-  getDirectUrl(fileName: string, env: { DO_SPACES_BUCKET: string; DO_SPACES_REGION: string }): string {
-    return `https://${env.DO_SPACES_BUCKET}.${env.DO_SPACES_REGION}.digitaloceanspaces.com/${fileName}`;
-  },
-
-  /**
-   * Extract file name from a space URL
+   * Extract file name from a URL
    */
   getFileNameFromUrl(url: string): string {
     try {

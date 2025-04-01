@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
-import { StorageService } from '@/lib/storage'
+import { CloudinaryService } from '@/lib/cloudinary-service'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(request: NextRequest) {
@@ -35,13 +35,14 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const ext = file.name.split('.').pop()
-    const fileName = `payment-proofs/${session.user.id}-${uuidv4()}.${ext}`
+    const cloudinary = CloudinaryService.getInstance()
+    
+    const uploadResult = await cloudinary.uploadFile(buffer, {
+      folder: 'uploads',
+      allowedFormats: ['jpg', 'jpeg', 'png', 'pdf']
+    })
 
-    const storage = StorageService.getInstance()
-    const fileUrl = await storage.uploadFile(buffer, fileName, file.type)
-
-    return NextResponse.json({ success: true, url: fileUrl })
+    return NextResponse.json({ success: true, url: uploadResult.secure_url })
   } catch (error: any) {
     console.error('Upload error:', error)
     return NextResponse.json(

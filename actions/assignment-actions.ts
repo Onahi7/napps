@@ -1,31 +1,14 @@
 'use server'
 
-import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
+import { PrismaClient } from '@prisma/client'
 import { authOptions } from '@/lib/auth-options'
 import { revalidatePath } from 'next/cache'
 
-export async function getAllAssignments() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) throw new Error('Unauthorized')
-
-  const result = await query(
-    `SELECT a.*, p.full_name as validator_name
-     FROM validator_assignments a
-     JOIN profiles p ON p.id = a.validator_id
-     WHERE a.deleted_at IS NULL
-     ORDER BY a.schedule_date ASC, a.schedule_time ASC`,
-  )
-
-  return result.rows.map(row => ({
-    ...row,
-    schedule_date: new Date(row.schedule_date).toISOString()
-  }))
-}
+const prisma = new PrismaClient()
 
 export async function createValidatorAssignment(data: {
   validatorId: string
-  mealType: string
   location: string
   scheduleDate: Date
   scheduleTime: string
@@ -33,59 +16,116 @@ export async function createValidatorAssignment(data: {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  await query(
-    `INSERT INTO validator_assignments (
-      validator_id,
-      meal_type,
-      location,
-      schedule_date,
-      schedule_time,
-      status,
-      created_at,
-      updated_at
-    ) VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), NOW())`,
-    [
-      data.validatorId,
-      data.mealType,
-      data.location,
-      data.scheduleDate,
-      data.scheduleTime
-    ]
-  )
+  // Calculate end time by adding 4 hours to start time
+  const [hour, minute] = data.scheduleTime.split(':').map(Number)
+  const endHour = (hour + 4) % 24
+  const endTime = `${endHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
 
-  revalidatePath('/admin/assignments')
-  return { success: true }
-}
+  await prisma.assignment.create({
+    data: {
+      validatorId: data.validatorId,
+      location: data.location,
+      date: data.scheduleDate,
+      startTime: data.scheduleTime,
+      endTime: endTime,
+      type: 'CHECK_IN',
+      status: 'PENDING',
+    }
+  })
 
-export async function updateAssignmentStatus(assignmentId: string, status: string) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) throw new Error('Unauthorized')
-
-  await query(
-    `UPDATE validator_assignments
-     SET status = $1, updated_at = NOW()
-     WHERE id = $2`,
-    [status, assignmentId]
-  )
-
-  revalidatePath('/admin/assignments')
+  revalidatePath('/admin/validators')
   revalidatePath('/validator/dashboard')
   return { success: true }
 }
 
-export async function deleteValidatorAssignment(assignmentId: string) {
+export async function getAllAssignments() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  // Soft delete the assignment
-  await query(
-    `UPDATE validator_assignments
-     SET deleted_at = NOW(), updated_at = NOW()
-     WHERE id = $1`,
-    [assignmentId]
-  )
+  try {
+    const assignments = await prisma.assignment.findMany({
+      include: {
+        validator: {
+          include: {
+            user: true
+          }
+        }
+      },
+      orderBy: [
+        { date: 'asc' },
+        { startTime: 'asc' }
+      ]
+    })
 
-  revalidatePath('/admin/assignments')
-  revalidatePath('/validator/dashboard')
-  return { success: true }
+    return assignments.map(assignment => ({
+      id: assignment.id,
+      location: assignment.location,
+      date: assignment.date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }),
+      startTime: assignment.startTime,
+      endTime: assignment.endTime,
+      type: assignment.type,
+      status: assignment.status,
+      validatorId: assignment.validatorId,
+      validatorName: assignment.validator.user.fullName,
+      validatorPhone: assignment.validator.user.phone
+    }))
+  } catch (error) {
+    console.error('Error getting assignments:', error)
+    throw error
+  }
+}
+
+export async function getValidatorAssignments(validatorId: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        validatorId,
+        date: {
+          gte: new Date()
+        }
+      },
+      orderBy: [
+        { date: 'asc' },
+        { startTime: 'asc' }
+      ]
+    })
+
+    return assignments.map(assignment => ({
+      ...assignment,
+      date: assignment.date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      })
+    }))
+  } catch (error) {
+    console.error('Error getting validator assignments:', error)
+    throw error
+  }
+}
+
+export async function updateAssignmentStatus(assignmentId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED') {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) throw new Error('Unauthorized')
+
+  try {
+    await prisma.assignment.update({
+      where: { id: assignmentId },
+      data: { status }
+    })
+
+    revalidatePath('/validator/dashboard')
+    revalidatePath('/admin/validators')
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating assignment status:', error)
+    throw error
+  }
 }

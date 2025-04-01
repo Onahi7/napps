@@ -17,16 +17,19 @@ export interface ConferenceDetails {
   accountName?: string
 }
 
+interface ConferenceHours {
+  registration: string
+  special_events?: string
+}
+
 export interface ConferenceDetailsResponse {
-  name: string;
-  date: string;
-  venue: string;
-  venue_address: string;
-  theme: string;
-  registration_hours: string;
-  morning_hours: string;
-  afternoon_hours: string;
-  evening_hours: string;
+  name: string
+  date: string
+  venue: string
+  venue_address: string
+  theme: string
+  registration_hours: string
+  special_events_hours?: string
 }
 
 // Get a config value by key
@@ -110,13 +113,6 @@ export async function getRegistrationAmount(): Promise<number> {
   }
 }
 
-export interface ConferenceHours {
-  registration: string;
-  morning: string;
-  afternoon: string;
-  evening: string;
-}
-
 export async function getConferenceDetails(): Promise<ConferenceDetailsResponse> {
   const cachedConfig = await cache.get('conference_details')
   if (cachedConfig) {
@@ -125,8 +121,7 @@ export async function getConferenceDetails(): Promise<ConferenceDetailsResponse>
     if (typeof parsed === 'object' && parsed !== null &&
         'name' in parsed && 'date' in parsed && 'venue' in parsed &&
         'venue_address' in parsed && 'theme' in parsed &&
-        'registration_hours' in parsed && 'morning_hours' in parsed &&
-        'afternoon_hours' in parsed && 'evening_hours' in parsed) {
+        'registration_hours' in parsed) {
       return parsed as ConferenceDetailsResponse
     }
   }
@@ -139,9 +134,7 @@ export async function getConferenceDetails(): Promise<ConferenceDetailsResponse>
     getServerConfig<string>("venue_address", ""),
     getServerConfig<ConferenceHours>("conference_hours", {
       registration: "",
-      morning: "",
-      afternoon: "",
-      evening: ""
+      special_events: ""
     })
   ])
 
@@ -152,9 +145,7 @@ export async function getConferenceDetails(): Promise<ConferenceDetailsResponse>
     venue_address,
     theme,
     registration_hours: hours.registration,
-    morning_hours: hours.morning,
-    afternoon_hours: hours.afternoon,
-    evening_hours: hours.evening
+    special_events_hours: hours.special_events
   }
 
   await cache.set('conference_details', details, 3600) // Cache for 1 hour

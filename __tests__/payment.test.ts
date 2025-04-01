@@ -30,7 +30,7 @@ describe('Payment Verification', () => {
       (verifyPayment as jest.Mock).mockResolvedValue(mockPaystackResponse);
       (query as jest.Mock).mockResolvedValue({ rows: [{ id: 'test-user-id' }] });
 
-      const result = await verifyRegistrationPayment('test-ref');
+      const result = await verifyRegistrationPayment();
 
       expect(result.verified).toBe(true);
       expect(query).toHaveBeenCalled();
@@ -39,7 +39,7 @@ describe('Payment Verification', () => {
     it('should handle failed registration payment verification', async () => {
       (verifyPayment as jest.Mock).mockRejectedValue(new Error('Payment verification failed'));
 
-      await expect(verifyRegistrationPayment('invalid-ref')).rejects.toThrow();
+      await expect(verifyRegistrationPayment()).rejects.toThrow();
     });
   });
 

@@ -3,190 +3,323 @@
 import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { FileText, Upload, Download, Trash2, Eye, Plus, File, BarChart } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
+import { Plus, FileText, Download, Eye, Pencil, Trash2, BarChart } from "lucide-react"
+import { getResources, createResource, updateResource, deleteResource } from "@/actions/resource-actions"
 
-export default function AdminResources() {
-  const [resources, setResources] = useState<Array<{
-    id: number;
-    name: string;
-    type: string;
-    size: string;
-    date: string;
-    access: string;
-  }>>([])
+interface Resource {
+  id: string;
+  title: string;
+  description?: string;
+  file_url: string;
+  file_type: string;
+  category: string;
+  is_public: boolean;
+  created_at: string;
+}
+
+export default function AdminResourcesPage() {
+  const [resources, setResources] = useState<Resource[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    category: "",
+    isPublic: false
+  })
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const { toast } = useToast()
 
   useEffect(() => {
-    // TODO: Implement resource fetching from backend
-    setLoading(false)
+    fetchResources()
   }, [])
 
-  const handleAddResource = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // TODO: Implement resource creation
+  const fetchResources = async () => {
+    try {
+      const data = await getResources(true) // Include private resources for admin
+      setResources(data)
+    } catch (error) {
+      console.error("Error fetching resources:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load resources",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (loading) {
-    return (
-      <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr]">
-        <DashboardSidebar role="admin" />
-        <div className="flex flex-col">
-          <DashboardHeader role="admin" title="Resources" />
-          <main className="flex-1 p-6">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <p>Loading resources...</p>
-            </div>
-          </main>
-        </div>
-      </div>
-    )
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!uploadFile) {
+      toast({
+        title: "Error",
+        description: "Please select a file to upload",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      await createResource({
+        title: formData.title,
+        type: formData.category as 'DOCUMENT' | 'VIDEO' | 'PRESENTATION' | 'OTHER',
+        description: formData.description,
+        file: uploadFile,
+        isPublic: formData.isPublic
+      })
+
+      toast({
+        title: "Success",
+        description: "Resource uploaded successfully"
+      })
+      setIsUploadDialogOpen(false)
+      resetForm()
+      fetchResources()
+    } catch (error) {
+      console.error("Error uploading resource:", error)
+      toast({
+        title: "Error",
+        description: "Failed to upload resource",
+        variant: "destructive"
+      })
+    }
   }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this resource?")) return
+
+    try {
+      await deleteResource(id)
+      toast({
+        title: "Success",
+        description: "Resource deleted successfully"
+      })
+      fetchResources()
+    } catch (error) {
+      console.error("Error deleting resource:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete resource",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleEdit = async (resource: Resource) => {
+    setSelectedResource(resource)
+    setFormData({
+      title: resource.title,
+      description: resource.description || "",
+      category: resource.category,
+      isPublic: resource.is_public
+    })
+    setIsUploadDialogOpen(true)
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedResource) return
+
+    try {
+      await updateResource(selectedResource.id, {
+        title: formData.title,
+        description: formData.description,
+        isPublic: formData.isPublic
+      })
+
+      toast({
+        title: "Success",
+        description: "Resource updated successfully"
+      })
+      setIsUploadDialogOpen(false)
+      resetForm()
+      fetchResources()
+    } catch (error) {
+      console.error("Error updating resource:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update resource",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      description: "",
+      category: "",
+      isPublic: false
+    })
+    setUploadFile(null)
+    setSelectedResource(null)
+  }
+
+  const categories = Array.from(new Set(resources.map(r => r.category)))
+  const filteredResources = resources.filter(resource => 
+    (selectedCategory === "all" || resource.category === selectedCategory) &&
+    (resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     resource.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+  )
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr]">
+    <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
       <DashboardSidebar role="admin" />
       <div className="flex flex-col">
-        <DashboardHeader role="admin" title="Resources" />
+        <DashboardHeader role="admin" title="Resource Management" />
         <main className="flex-1 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Manage Resources</h1>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Resources</h2>
+              <p className="text-sm text-muted-foreground">
+                Manage and organize conference materials
+              </p>
+            </div>
+            <Button onClick={() => setIsUploadDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Resource
+              Upload Resource
             </Button>
           </div>
 
-          <Tabs defaultValue="all" className="mb-6">
-            <TabsList>
-              <TabsTrigger value="all">All Resources</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="presentations">Presentations</TabsTrigger>
-            </TabsList>
-            <TabsContent value="all" className="mt-6">
-              <Card>
+          <div className="mb-6 flex items-center gap-4">
+            <div className="relative flex-1 max-w-sm">
+              <Input
+                placeholder="Search resources..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+              <FileText className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredResources.map((resource) => (
+              <Card key={resource.id}>
                 <CardHeader>
-                  <CardTitle>Conference Resources</CardTitle>
-                  <CardDescription>
-                    Manage and organize conference materials and documents
-                  </CardDescription>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="truncate">{resource.title}</span>
+                    <Badge variant={resource.is_public ? "default" : "secondary"}>
+                      {resource.is_public ? "Public" : "Private"}
+                    </Badge>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="relative">
-                    <Input
-                      placeholder="Search resources..."
-                      className="max-w-sm mb-4"
-                    />
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {resource.description}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline">{resource.category}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" asChild>
+                        <a href={resource.file_url} target="_blank" rel="noopener noreferrer">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(resource)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(resource.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  
-                  {resources.length === 0 ? (
-                    <div className="text-center py-8">
-                      <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <h3 className="mt-4 text-lg font-medium">No resources yet</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Add conference materials, presentations, and documents.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="rounded-md border">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr className="border-b bg-muted/50">
-                            <th className="py-3 px-4 text-left text-sm font-medium">Name</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium">Type</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium">Size</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium">Date</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium">Access</th>
-                            <th className="py-3 px-4 text-right text-sm font-medium">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {resources.map((resource) => (
-                            <tr key={resource.id} className="border-b">
-                              <td className="py-3 px-4">{resource.name}</td>
-                              <td className="py-3 px-4">{resource.type}</td>
-                              <td className="py-3 px-4">{resource.size}</td>
-                              <td className="py-3 px-4">{resource.date}</td>
-                              <td className="py-3 px-4">{resource.access}</td>
-                              <td className="py-3 px-4 text-right space-x-2">
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm">
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
+            ))}
+          </div>
 
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Resource</DialogTitle>
-                <DialogDescription>
-                  Upload a new resource for conference participants
-                </DialogDescription>
+                <DialogTitle>
+                  {selectedResource ? "Edit Resource" : "Upload Resource"}
+                </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleAddResource}>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Resource Name</Label>
-                    <Input id="name" required />
+              <form onSubmit={selectedResource ? handleUpdate : handleUpload}>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="title">Title</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      required
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Type</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="document">Document</SelectItem>
-                        <SelectItem value="presentation">Presentation</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    />
                   </div>
-                  <div className="space-y-2">
+                  <div>
+                    <Label htmlFor="category">Category</Label>
+                    <Input
+                      id="category"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
                     <Label htmlFor="file">File</Label>
-                    <Input id="file" type="file" />
+                    <Input
+                      id="file"
+                      type="file"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      required={!selectedResource}
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="access">Access Level</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select access level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Participants</SelectItem>
-                        <SelectItem value="paid">Paid Participants Only</SelectItem>
-                        <SelectItem value="admin">Admins Only</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="public"
+                      checked={formData.isPublic}
+                      onCheckedChange={(checked) => setFormData({ ...formData, isPublic: checked })}
+                    />
+                    <Label htmlFor="public">Make resource public</Label>
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="mt-6">
+                  <Button type="button" variant="outline" onClick={() => {
+                    setIsUploadDialogOpen(false)
+                    resetForm()
+                  }}>
+                    Cancel
+                  </Button>
                   <Button type="submit">
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload Resource
+                    {selectedResource ? "Update" : "Upload"}
                   </Button>
                 </DialogFooter>
               </form>

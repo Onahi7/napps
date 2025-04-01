@@ -1,27 +1,23 @@
-import React from 'react';
-import { render, fireEvent, waitFor, screen } from '@testing-library/react';
-import ValidatorScan from '@/components/validator-scan';
+import { render } from '@testing-library/react';
+import { screen } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { waitFor } from '@testing-library/dom';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/components/auth-provider';
+import { useAuth } from '@/hooks/use-auth';
+import ValidatorScan from '@/components/validator-scan';
+import { validateParticipant } from '@/actions/scan-actions';
 
-jest.mock('@/hooks/use-toast', () => ({
-  useToast: jest.fn()
-}));
+jest.mock('@/hooks/use-toast');
+jest.mock('@/hooks/use-auth');
+jest.mock('@/actions/scan-actions');
 
-jest.mock('@/components/auth-provider', () => ({
-  useAuth: jest.fn()
-}));
-
-jest.mock('../lib/qrcode', () => ({
-  validateQRCode: jest.fn().mockImplementation((code) => {
-    if (code === 'valid-code') {
-      return Promise.resolve({ success: true, message: 'Successfully validated' });
-    } else if (code === 'already-validated') {
-      return Promise.resolve({ success: false, message: 'Already been validated' });
-    }
-    return Promise.reject(new Error('Invalid QR code'));
-  })
-}));
+// Mock implementations
+(validateParticipant as jest.Mock).mockImplementation(async (code) => {
+  if (code === 'already-validated') {
+    throw new Error('Already validated');
+  }
+  return { success: true };
+});
 
 describe('ValidatorScan', () => {
   const mockToast = jest.fn();
@@ -35,19 +31,17 @@ describe('ValidatorScan', () => {
     (useAuth as jest.Mock).mockReturnValue({ user: mockUser });
   });
 
-  it('renders all validator sections', () => {
+  it('renders scanner sections', () => {
     render(<ValidatorScan />);
-    expect(screen.getByText('Breakfast')).toBeInTheDocument();
-    expect(screen.getByText('Lunch')).toBeInTheDocument();
-    expect(screen.getByText('Dinner')).toBeInTheDocument();
-    expect(screen.getByText('Accreditation')).toBeInTheDocument();
+    expect(screen.getByText(/scan qr code/i)).toBeInTheDocument();
+    expect(screen.getByText(/manual entry/i)).toBeInTheDocument();
   });
 
   it('handles successful validation', async () => {
     render(<ValidatorScan />);
     const input = screen.getByLabelText(/scan qr code/i);
     
-    fireEvent.change(input, { target: { value: 'valid-code' } });
+    userEvent.type(input, 'valid-code');
     
     await waitFor(() => {
       expect(screen.getByText(/successfully validated/i)).toBeInTheDocument();
@@ -58,7 +52,7 @@ describe('ValidatorScan', () => {
     render(<ValidatorScan />);
     const input = screen.getByLabelText(/scan qr code/i);
     
-    fireEvent.change(input, { target: { value: 'already-validated' } });
+    userEvent.type(input, 'already-validated');
     
     await waitFor(() => {
       expect(screen.getByText(/already been validated/i)).toBeInTheDocument();
@@ -71,8 +65,8 @@ describe('ValidatorScan', () => {
     const phoneInput = screen.getByPlaceholderText(/enter phone number/i);
     const validateButton = screen.getByText(/validate/i);
 
-    fireEvent.change(phoneInput, { target: { value: '12345' } });
-    fireEvent.click(validateButton);
+    userEvent.type(phoneInput, '12345');
+    userEvent.click(validateButton);
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
@@ -89,15 +83,15 @@ describe('ValidatorScan', () => {
     const phoneInput = screen.getByPlaceholderText(/enter phone number/i);
     const validateButton = screen.getByText(/validate/i);
 
-    fireEvent.change(phoneInput, { target: { value: '08012345678' } });
-    fireEvent.click(validateButton);
+    userEvent.type(phoneInput, '08012345678');
+    userEvent.click(validateButton);
 
     await waitFor(() => {
       expect(screen.getByText(/successfully validated/i)).toBeInTheDocument();
     });
 
     // Try to validate again
-    fireEvent.click(validateButton);
+    userEvent.click(validateButton);
 
     await waitFor(() => {
       expect(screen.getByText(/already been validated/i)).toBeInTheDocument();

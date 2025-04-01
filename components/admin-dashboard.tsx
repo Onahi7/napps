@@ -7,6 +7,18 @@ import { Users, CreditCard, FileText, Settings, CheckSquare } from "lucide-react
 import Link from "next/link"
 import { getUsersByRole } from "@/actions/user-actions"
 import { getRegistrationAmount, getConferenceDetails } from "@/lib/config-service"
+import { getResourceStats } from "@/actions/resource-actions"
+import type { ResourceType } from "@prisma/client"
+
+interface ResourceStats {
+  total_resources: number;
+  public_resources: number;
+  recent_resources: number;
+  categories: Array<{
+    category: ResourceType;
+    count: number;
+  }>;
+}
 
 export function AdminDashboard() {
   const [participants, setParticipants] = useState<any[]>([])
@@ -18,21 +30,29 @@ export function AdminDashboard() {
     venue: "",
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [resourceStats, setResourceStats] = useState<ResourceStats>({
+    total_resources: 0,
+    public_resources: 0,
+    recent_resources: 0,
+    categories: []
+  })
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        const [participantsData, validatorsData, amount, details] = await Promise.all([
-          getUsersByRole("participant"),
-          getUsersByRole("validator"),
+        const [participantsData, validatorsData, amount, details, stats] = await Promise.all([
+          getUsersByRole("PARTICIPANT"),
+          getUsersByRole("VALIDATOR"),
           getRegistrationAmount(),
           getConferenceDetails(),
+          getResourceStats()
         ])
 
         setParticipants(participantsData)
         setValidators(validatorsData)
         setRegistrationAmount(amount)
+        setResourceStats(stats)
 
         if (details) {
           setConferenceDetails({
@@ -161,8 +181,24 @@ export function AdminDashboard() {
           <FileText className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">Conference Materials</div>
-          <p className="text-xs text-muted-foreground">Manage presentations, schedules, and other resources</p>
+          <div className="text-2xl font-bold">{resourceStats.total_resources}</div>
+          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+            <span>Public: {resourceStats.public_resources}</span>
+            <span>New (7d): {resourceStats.recent_resources}</span>
+          </div>
+          {resourceStats.categories.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-muted-foreground">Categories:</p>
+              <div className="space-y-1">
+                {resourceStats.categories.map((cat: any) => (
+                  <div key={cat.category} className="flex justify-between text-xs">
+                    <span>{cat.category}</span>
+                    <span>{cat.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
         <CardFooter>
           <Link href="/admin/resources" className="w-full">

@@ -1,6 +1,6 @@
-import React from 'react';
+import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
-import ValidatorDashboard from '../components/validator-dashboard';
+import ValidatorDashboard from '@/components/validator-dashboard';
 
 describe('ValidatorDashboard', () => {
   it('renders validator dashboard', () => {

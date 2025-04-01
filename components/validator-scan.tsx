@@ -12,17 +12,19 @@ import { CheckCircle, XCircle, QrCode, Camera, Phone, User, Search } from "lucid
 import { useState, useRef, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
+import jsQR from 'jsqr'
 
 export default function ValidatorScan() {
   const { user } = useAuth()
   const [scanActive, setScanActive] = useState(false)
-  const [validationType, setValidationType] = useState("breakfast")
+  const [validationType] = useState<string>("accreditation")
   const [scanResult, setScanResult] = useState<null | { success: boolean; message: string; participant?: any }>(null)
   const [manualPhone, setManualPhone] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("scan")
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const scanIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const { toast } = useToast()
 
   const startScanning = async () => {
@@ -31,7 +33,38 @@ export default function ValidatorScan() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         setScanActive(true)
-        // TODO: Initialize QR code scanner
+        
+        // Start QR code scanning loop
+        scanIntervalRef.current = setInterval(() => {
+          if (videoRef.current && canvasRef.current) {
+            const canvas = canvasRef.current
+            const context = canvas.getContext('2d')
+            if (!context) return
+
+            // Set canvas size to match video
+            canvas.width = videoRef.current.videoWidth
+            canvas.height = videoRef.current.videoHeight
+            
+            // Draw current video frame to canvas
+            context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+            
+            // Get image data for QR code scanning
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+            const code = jsQR(imageData.data, imageData.width, imageData.height)
+            
+            if (code) {
+              try {
+                const qrData = JSON.parse(code.data)
+                if (qrData.id && qrData.type === 'participant') {
+                  handleValidation(qrData.id)
+                  stopScanning()
+                }
+              } catch (e) {
+                console.error('Invalid QR code data:', e)
+              }
+            }
+          }
+        }, 500) // Scan every 500ms
       }
     } catch (error) {
       console.error('Error accessing camera:', error)
@@ -45,6 +78,9 @@ export default function ValidatorScan() {
 
   const stopScanning = () => {
     setScanActive(false)
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+    }
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream
       stream.getTracks().forEach(track => track.stop())
@@ -52,11 +88,11 @@ export default function ValidatorScan() {
     }
   }
 
-  const handleManualValidation = async () => {
-    if (!manualPhone) {
+  const handleValidation = async (participantId?: string) => {
+    if (!participantId && !manualPhone) {
       toast({
         title: "Error",
-        description: "Please enter a phone number",
+        description: "Please enter a phone number or scan a QR code",
         variant: "destructive",
       })
       return
@@ -64,8 +100,36 @@ export default function ValidatorScan() {
 
     setIsLoading(true)
     try {
-      // TODO: Implement real validation API call
-      setIsLoading(false)
+      const response = await fetch('/api/validator/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          participantId,
+          phone: manualPhone,
+          validationType,
+          location: 'Main Hall' // TODO: Make this dynamic
+        })
+      })
+
+      const data = await response.json()
+      setScanResult({
+        success: data.success,
+        message: data.message,
+        participant: data.participant
+      })
+
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Participant validated successfully"
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: data.message,
+          variant: "destructive"
+        })
+      }
     } catch (error) {
       console.error('Error validating:', error)
       toast({
@@ -73,28 +137,17 @@ export default function ValidatorScan() {
         description: "Failed to validate participant",
         variant: "destructive"
       })
-      setIsLoading(false)
-    }
-  }
-
-  const handleValidate = async () => {
-    if (!scanResult?.participant) return
-
-    setIsLoading(true)
-    try {
-      // TODO: Implement real validation API call
-      setIsLoading(false)
-    } catch (error) {
-      console.error('Error validating:', error)
-      toast({
-        title: "Error",
-        description: "Failed to validate participant",
-        variant: "destructive"
+      setScanResult({
+        success: false,
+        message: "Failed to validate participant"
       })
+    } finally {
       setIsLoading(false)
     }
   }
 
+  const handleManualValidation = () => handleValidation()
+  
   const handleReset = () => {
     setScanResult(null)
     setManualPhone("")
@@ -133,349 +186,110 @@ export default function ValidatorScan() {
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <Card className="border-napps-gold/30 card-glow">
             <CardHeader>
-              <CardTitle>Validation Type</CardTitle>
-              <CardDescription>Select what you are validating the participant for</CardDescription>
+              <CardTitle>Validation Process</CardTitle>
+              <CardDescription>Scan participant QR codes to validate their accreditation</CardDescription>
             </CardHeader>
             <CardContent>
-              <RadioGroup
-                value={validationType}
-                onValueChange={setValidationType}
-                className="grid grid-cols-2 gap-4 md:grid-cols-4"
-              >
-                <div>
-                  <RadioGroupItem value="breakfast" id="breakfast" className="peer sr-only" />
-                  <Label
-                    htmlFor="breakfast"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-napps-gold [&:has([data-state=checked])]:border-napps-gold"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mb-3 h-6 w-6"
-                    >
-                      <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
-                      <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
-                      <line x1="6" y1="1" x2="6" y2="4"></line>
-                      <line x1="10" y1="1" x2="10" y2="4"></line>
-                      <line x1="14" y1="1" x2="14" y2="4"></line>
-                    </svg>
-                    Breakfast
-                  </Label>
-                </div>
-                <div>
-                  <RadioGroupItem value="lunch" id="lunch" className="peer sr-only" />
-                  <Label
-                    htmlFor="lunch"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-napps-gold [&:has([data-state=checked])]:border-napps-gold"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mb-3 h-6 w-6"
-                    >
-                      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path>
-                      <path d="M7 2v20"></path>
-                      <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>
-                    </svg>
-                    Lunch
-                  </Label>
-                </div>
-                <div>
-                  <RadioGroupItem value="dinner" id="dinner" className="peer sr-only" />
-                  <Label
-                    htmlFor="dinner"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-napps-gold [&:has([data-state=checked])]:border-napps-gold"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mb-3 h-6 w-6"
-                    >
-                      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path>
-                      <path d="M7 2v20"></path>
-                      <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>
-                    </svg>
-                    Dinner
-                  </Label>
-                </div>
-                <div>
-                  <RadioGroupItem value="accreditation" id="accreditation" className="peer sr-only" />
-                  <Label
-                    htmlFor="accreditation"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-napps-gold [&:has([data-state=checked])]:border-napps-gold"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mb-3 h-6 w-6"
-                    >
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="9" cy="7" r="4"></circle>
-                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                    </svg>
-                    Accreditation
-                  </Label>
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
-
-          <Card className="border-napps-gold/30">
-            <CardHeader>
-              <Tabs defaultValue="scan" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="scan">Scan QR Code</TabsTrigger>
-                  <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+              <Tabs defaultValue="scan" className="w-full" onValueChange={setActiveTab}>
+                <TabsList>
+                  <TabsTrigger value="scan">
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Scan QR Code
+                  </TabsTrigger>
+                  <TabsTrigger value="manual">
+                    <Phone className="mr-2 h-4 w-4" />
+                    Manual Entry
+                  </TabsTrigger>
                 </TabsList>
-              </Tabs>
-            </CardHeader>
-            <CardContent>
-              <TabsContent value="scan" className="mt-0">
-                <div className="flex flex-col items-center space-y-4">
-                  {!scanResult && (
-                    <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-lg border bg-muted">
-                      {scanActive ? (
-                        <>
-                          <video
-                            ref={videoRef}
-                            className="h-full w-full object-cover"
-                            autoPlay
-                            playsInline
-                            muted
-                          ></video>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="h-48 w-48 animate-pulse rounded-lg border-4 border-dashed border-napps-gold"></div>
-                          </div>
-                          <canvas ref={canvasRef} className="hidden"></canvas>
-                        </>
-                      ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center">
-                          <QrCode className="mb-4 h-16 w-16 text-muted-foreground" />
-                          <p className="text-center text-sm text-muted-foreground">
-                            Click the button below to start scanning
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
-                  {scanResult && (
-                    <div
-                      className={`w-full rounded-lg border p-4 ${
-                        scanResult.success ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {scanResult.success ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
+                <TabsContent value="scan" className="mt-4">
+                  <div className="flex flex-col items-center space-y-4">
+                    {!scanResult && (
+                      <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-lg border bg-muted">
+                        {scanActive ? (
+                          <>
+                            <video
+                              ref={videoRef}
+                              className="h-full w-full object-cover"
+                              autoPlay
+                              playsInline
+                              muted
+                            ></video>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="h-48 w-48 animate-pulse rounded-lg border-4 border-dashed border-napps-gold"></div>
+                            </div>
+                            <canvas ref={canvasRef} className="hidden"></canvas>
+                          </>
                         ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
+                          <div className="flex h-full w-full flex-col items-center justify-center">
+                            <QrCode className="mb-4 h-16 w-16 text-muted-foreground" />
+                            <p className="text-center text-sm text-muted-foreground">
+                              Click the button below to start scanning
+                            </p>
+                          </div>
                         )}
-                        <p className="font-medium">{scanResult.message}</p>
                       </div>
+                    )}
 
-                      {scanResult.participant && (
-                        <div className="mt-4 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span>{scanResult.participant.full_name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{scanResult.participant.phone}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {scanResult.participant.school}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!scanResult ? (
-                    <Button
-                      onClick={scanActive ? stopScanning : startScanning}
-                      className={
-                        scanActive
-                          ? "bg-red-500 hover:bg-red-600"
-                          : "bg-napps-gold text-black hover:bg-napps-gold/90"
-                      }
-                    >
-                      {scanActive ? (
-                        <>
-                          <XCircle className="mr-2 h-4 w-4" />
-                          Stop Scanning
-                        </>
-                      ) : (
-                        <>
-                          <Camera className="mr-2 h-4 w-4" />
-                          Start Scanning
-                        </>
-                      )}
-                    </Button>
-                  ) : (
-                    <div className="flex w-full flex-col gap-2 sm:flex-row">
-                      {scanResult.success && scanResult.participant && (
-                        <Button
-                          onClick={handleValidate}
-                          className="bg-green-500 hover:bg-green-600"
-                          disabled={isLoading}
-                        >
-                          {isLoading ? (
-                            <span className="flex items-center gap-1">
-                              <svg
-                                className="h-4 w-4 animate-spin"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                ></circle>
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                ></path>
-                              </svg>
-                              Processing...
-                            </span>
-                          ) : (
-                            <>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Confirm Validation
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      <Button onClick={handleReset} variant="outline">
-                        Scan Another
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="manual" className="mt-0">
-                <div className="flex flex-col space-y-4">
-                  <div className="flex flex-col space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="phone"
-                        placeholder="Enter participant's phone number"
-                        value={manualPhone}
-                        onChange={(e) => setManualPhone(e.target.value)}
-                        className="flex-1"
-                      />
-                      <Button
-                        onClick={handleManualValidation}
-                        className="bg-napps-gold text-black hover:bg-napps-gold/90"
-                        disabled={isLoading || !manualPhone}
+                    {scanResult && (
+                      <div
+                        className={`w-full rounded-lg border p-4 ${
+                          scanResult.success ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"
+                        }`}
                       >
-                        {isLoading ? (
-                          <span className="flex items-center gap-1">
-                            <svg
-                              className="h-4 w-4 animate-spin"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              ></circle>
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              ></path>
-                            </svg>
-                            Searching...
-                          </span>
+                        <div className="flex items-center gap-2">
+                          {scanResult.success ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          )}
+                          <p className="font-medium">{scanResult.message}</p>
+                        </div>
+
+                        {scanResult.participant && (
+                          <div className="mt-4 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <span>{scanResult.participant.full_name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span>{scanResult.participant.phone}</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {scanResult.participant.school}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!scanResult ? (
+                      <Button
+                        onClick={scanActive ? stopScanning : startScanning}
+                        className={
+                          scanActive
+                            ? "bg-red-500 hover:bg-red-600"
+                            : "bg-napps-gold text-black hover:bg-napps-gold/90"
+                        }
+                      >
+                        {scanActive ? (
+                          <>
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Stop Scanning
+                          </>
                         ) : (
                           <>
-                            <Search className="mr-2 h-4 w-4" />
-                            Search
+                            <Camera className="mr-2 h-4 w-4" />
+                            Start Scanning
                           </>
                         )}
                       </Button>
-                    </div>
-                  </div>
-
-                  {scanResult && (
-                    <div
-                      className={`rounded-lg border p-4 ${
-                        scanResult.success ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {scanResult.success ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
-                        )}
-                        <p className="font-medium">{scanResult.message}</p>
-                      </div>
-
-                      {scanResult.participant && (
-                        <div className="mt-4 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span>{scanResult.participant.full_name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{scanResult.participant.phone}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {scanResult.participant.school}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="mt-4 flex gap-2">
+                    ) : (
+                      <div className="flex w-full flex-col gap-2 sm:flex-row">
                         {scanResult.success && scanResult.participant && (
                           <Button
-                            onClick={handleValidate}
+                            onClick={() => handleValidation(scanResult?.participant?.id)}
                             className="bg-green-500 hover:bg-green-600"
                             disabled={isLoading}
                           >
@@ -512,13 +326,143 @@ export default function ValidatorScan() {
                           </Button>
                         )}
                         <Button onClick={handleReset} variant="outline">
-                          Reset
+                          Scan Another
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="manual" className="mt-0">
+                  <div className="flex flex-col space-y-4">
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="phone"
+                          placeholder="Enter participant's phone number"
+                          value={manualPhone}
+                          onChange={(e) => setManualPhone(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          onClick={handleManualValidation}
+                          className="bg-napps-gold text-black hover:bg-napps-gold/90"
+                          disabled={isLoading || !manualPhone}
+                        >
+                          {isLoading ? (
+                            <span className="flex items-center gap-1">
+                              <svg
+                                className="h-4 w-4 animate-spin"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                              Searching...
+                            </span>
+                          ) : (
+                            <>
+                              <Search className="mr-2 h-4 w-4" />
+                              Search
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
-                  )}
-                </div>
-              </TabsContent>
+
+                    {scanResult && (
+                      <div
+                        className={`rounded-lg border p-4 ${
+                          scanResult.success ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {scanResult.success ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          )}
+                          <p className="font-medium">{scanResult.message}</p>
+                        </div>
+
+                        {scanResult.participant && (
+                          <div className="mt-4 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <span>{scanResult.participant.full_name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span>{scanResult.participant.phone}</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {scanResult.participant.school}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex gap-2">
+                          {scanResult.success && scanResult.participant && (
+                            <Button
+                              onClick={() => handleValidation(scanResult?.participant?.id)}
+                              className="bg-green-500 hover:bg-green-600"
+                              disabled={isLoading}
+                            >
+                              {isLoading ? (
+                                <span className="flex items-center gap-1">
+                                  <svg
+                                    className="h-4 w-4 animate-spin"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                  Processing...
+                                </span>
+                              ) : (
+                                <>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Confirm Validation
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          <Button onClick={handleReset} variant="outline">
+                            Reset
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </main>

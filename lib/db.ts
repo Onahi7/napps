@@ -2,26 +2,32 @@ import { Pool } from 'pg'
 import { env } from './env'
 import { DatabaseMonitor } from './db-monitor'
 
-// Disable native PG module to ensure compatibility
-process.env.NODE_PG_FORCE_NATIVE = 'false'
+// Check if code is running on the server
+const isServer = typeof window === 'undefined'
+if (!isServer) {
+  throw new Error('Database operations can only be performed on the server')
+}
 
-// Create PostgreSQL connection pool with optimized settings for Digital Ocean
+// Disable native PG module to ensure compatibility
+process.env.NODE_PG_FORCE_NATIVE = '0'
+
+// Create PostgreSQL connection pool with optimized settings for Neon
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
-  ssl: env.DATABASE_SSL ? {
-    rejectUnauthorized: false,
-    checkServerIdentity: () => undefined
-  } : false,
-  // Connection pool settings optimized for Digital Ocean managed database
-  max: 10,                          // Reduced from 20 to prevent overloading the connection pool
-  min: 2,                           // Reduced minimum connections to be more conservative
-  idleTimeoutMillis: 30000,         // Reduced to 30 seconds
-  connectionTimeoutMillis: 10000,   // Reduced to 10 seconds
-  statement_timeout: 30000,         // Reduced to 30 seconds
-  query_timeout: 20000,             // Reduced to 20 seconds 
+  ssl: {
+    rejectUnauthorized: true,  // Changed to true for proper SSL verification
+    // Remove checkServerIdentity override for proper SSL verification
+  },
+  // Connection pool settings optimized for Neon serverless
+  max: 3,                           // Further reduced pool size for serverless
+  min: 0,                          // Allow pool to scale to zero
+  idleTimeoutMillis: 5000,         // Reduced idle timeout for serverless
+  connectionTimeoutMillis: 10000,   // Increased connection timeout
+  statement_timeout: 30000,         // Increased statement timeout
+  query_timeout: 20000,            // Increased query timeout
   application_name: 'napps_summit',
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000
+  keepAliveInitialDelayMillis: 1000
 })
 
 // Initialize database monitoring

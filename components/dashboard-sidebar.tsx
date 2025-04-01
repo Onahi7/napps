@@ -49,8 +49,8 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
     { href: "/admin/payments", icon: CreditCard, label: "Payment Reviews" },
     { href: "/admin/validators", icon: QrCode, label: "Validators" },
     { href: "/admin/accreditation", icon: CheckSquare, label: "Accreditation" },
+    { href: "/admin/schedule", icon: Calendar, label: "Schedule" },
     { href: "/admin/hotels", icon: Building, label: "Hotels" },
-    { href: "/admin/meals", icon: Coffee, label: "Meal Tracking" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
     { href: "/admin/assignments", icon: CalendarClock, label: "Assignments" },
   ]
@@ -68,7 +68,6 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
     { href: "/validator/dashboard", icon: Home, label: "Dashboard" },
     { href: "/validator/scan", icon: QrCode, label: "Scan QR" },
     { href: "/validator/accreditation", icon: CheckSquare, label: "Accreditation" },
-    { href: "/validator/meals", icon: Coffee, label: "Meal Tracking" },
     { href: "/validator/accommodation", icon: BedDouble, label: "Accommodation" },
   ]
 

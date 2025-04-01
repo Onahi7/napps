@@ -39,17 +39,21 @@ export default function AdminValidators() {
     success: boolean;
   }>>([])
 
-  useEffect(() => {
-    const loadValidators = async () => {
-      try {
-        // TODO: Implement validator fetching from API
-        setLoading(false)
-      } catch (error) {
-        console.error('Error loading validators:', error)
-        setLoading(false)
+  const loadValidators = async () => {
+    try {
+      const response = await fetch('/api/validators')
+      const data = await response.json()
+      if (data.success) {
+        setValidators(data.validators)
       }
+      setLoading(false)
+    } catch (error) {
+      console.error('Error loading validators:', error)
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadValidators()
   }, [])
 
@@ -72,24 +76,36 @@ export default function AdminValidators() {
     role: "Breakfast",
   })
 
-  const handleAddValidator = () => {
-    const validator = {
-      id: validators.length + 1,
-      name: newValidator.name,
-      email: newValidator.email,
-      phone: newValidator.phone,
-      role: newValidator.role,
-      status: "Active",
-      validations: 0,
-    }
+  const handleAddValidator = async () => {
+    try {
+      const response = await fetch('/api/validators', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: newValidator.email,
+          password: 'defaultPassword123',
+          full_name: newValidator.name,
+          phone: newValidator.phone
+        }),
+      })
 
-    setValidators([...validators, validator])
-    setNewValidator({
-      name: "",
-      email: "",
-      phone: "",
-      role: "Breakfast",
-    })
+      const data = await response.json()
+      if (data.success) {
+        await loadValidators()
+        setNewValidator({
+          name: '',
+          email: '',
+          phone: '',
+          role: 'Breakfast',
+        })
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (error: any) {
+      console.error('Error creating validator:', error)
+    }
   }
 
   const toggleValidatorStatus = (id: number) => {
@@ -125,7 +141,7 @@ export default function AdminValidators() {
                 <DialogHeader>
                   <DialogTitle>Add New Validator</DialogTitle>
                   <DialogDescription>
-                    Create a new validator account for meal and accreditation validation
+                    Create a new validator account for participant accreditation
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -149,29 +165,13 @@ export default function AdminValidators() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
+                    <Label htmlFor="phone">Phone</Label>
                     <Input
                       id="phone"
                       value={newValidator.phone}
                       onChange={(e) => setNewValidator({ ...newValidator, phone: e.target.value })}
                       className="border-napps-green/30 focus-visible:ring-napps-green"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Validation Role</Label>
-                    <Select
-                      value={newValidator.role}
-                      onValueChange={(value) => setNewValidator({ ...newValidator, role: value })}
-                    >
-                      <SelectTrigger className="border-napps-green/30 focus-visible:ring-napps-green">
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Breakfast">Breakfast Validator</SelectItem>
-                        <SelectItem value="Dinner">Dinner Validator</SelectItem>
-                        <SelectItem value="Accreditation">Accreditation Validator</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
                 <DialogFooter>
@@ -189,7 +189,7 @@ export default function AdminValidators() {
           <Card className="border-napps-green/20 dark:border-napps-green/30 mb-6">
             <CardHeader>
               <CardTitle>Validator Overview</CardTitle>
-              <CardDescription>Manage validators for meal and accreditation validation</CardDescription>
+              <CardDescription>Manage validators for participant accreditation</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -235,16 +235,8 @@ export default function AdminValidators() {
                     <div>{validator.email}</div>
                     <div>{validator.phone}</div>
                     <div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          validator.role === "Breakfast"
-                            ? "bg-napps-green/20 text-napps-green dark:bg-napps-green/30 dark:text-napps-gold"
-                            : validator.role === "Dinner"
-                              ? "bg-napps-gold/20 text-napps-gold dark:bg-napps-gold/30"
-                              : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                        }`}
-                      >
-                        {validator.role}
+                      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-napps-green/20 text-napps-green dark:bg-napps-green/30 dark:text-napps-gold">
+                        Accreditation
                       </span>
                     </div>
                     <div>{validator.validations}</div>
