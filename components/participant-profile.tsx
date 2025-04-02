@@ -104,7 +104,6 @@ export default function ParticipantProfile() {
         phone: profileData.phone,
         organization: profileData.organization,
         position: profileData.nappsPosition,
-        dietaryRequirements: profileData.dietaryRequirements,
         chapter: profileData.nappsChapter,
         state: profileData.schoolState,
         lga: profileData.schoolCity

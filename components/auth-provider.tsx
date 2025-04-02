@@ -58,41 +58,56 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
-  const pathname = usePathname()
+  const pathname = usePathname() || '/'
   const { data: session, status } = useSession()
   const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    // Update loading state when session status changes
+    // Only update loading state when we have a definitive session status
     if (status !== 'loading') {
       setLoading(false)
     }
   }, [status])
 
   useEffect(() => {
-    if (!loading) {
-      const isAuthRoute = pathname === "/login" || pathname === "/register" || pathname === "/pre-register"
-      if (!session && !isAuthRoute && pathname !== "/") {
-        router.push("/login")
-      } else if (session && isAuthRoute) {
-        if (session.user.role === "admin") {
-          router.push("/admin/dashboard")
-        } else if (session.user.role === "validator") {
-          router.push("/validator/dashboard")
-        } else {
-          router.push("/participant/dashboard")
+    // Only handle redirects when we have a definitive session status
+    if (status === 'loading') return;
+
+    const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/pre-register'
+    const isPublicRoute = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/offline'
+
+    if (status === 'unauthenticated') {
+      if (!isAuthRoute && !isPublicRoute) {
+        const callbackUrl = pathname ? encodeURIComponent(pathname) : ''
+        router.push(`/login?callbackUrl=${callbackUrl}`)
+      }
+    } else if (status === 'authenticated' && session?.user) {
+      // Handle redirects for authenticated users
+      if (isAuthRoute) {
+        // If on auth route, redirect to appropriate dashboard
+        const dashboardPath = getDashboardPath(session.user.role)
+        router.replace(dashboardPath)
+      } else {
+        // Validate current path against user role
+        const currentPath = pathname.split('/')[1] // Get first segment
+        const allowedPath = getAllowedPath(session.user.role, currentPath)
+        
+        if (allowedPath && allowedPath !== pathname) {
+          router.replace(allowedPath)
         }
       }
     }
-  }, [session, pathname, router, loading])
+  }, [status, session, pathname, router])
 
   const signIn = async (phone: string) => {
     try {
       const result = await nextAuthSignIn("credentials", {
         identifier: phone,
         loginMethod: "phone",
+        isAdmin: "false",
         redirect: false,
       })
+
       if (!result?.error) {
         return { error: null }
       }
@@ -100,6 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return { error: "An error occurred during sign in" }
     }
+  }
+
+  const signOut = async () => {
+    await nextAuthSignOut()
   }
 
   const register = async (userData: {
@@ -128,26 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(data.error || 'Registration failed')
       }
 
-      // Auto login after successful registration
-      const result = await nextAuthSignIn("credentials", {
-        identifier: userData.email,
-        loginMethod: "email",
-        redirect: false,
-      })
-
-      if (result?.error) {
-        throw new Error('Auto login after registration failed')
-      }
-
       return { success: true, error: null }
     } catch (error: any) {
       console.error("Registration error:", error)
       return { success: false, error: error.message }
     }
-  }
-
-  const signOut = async () => {
-    await nextAuthSignOut({ callbackUrl: "/login" })
   }
 
   const value = {
@@ -156,9 +160,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     signIn,
     signOut,
-    register,
+    register
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+// Helper functions
+function getDashboardPath(role: string): string {
+  switch (role) {
+    case 'ADMIN':
+      return '/admin/dashboard'
+    case 'VALIDATOR':
+      return '/validator/dashboard'
+    default:
+      return '/participant/dashboard'
+  }
+}
+
+function getAllowedPath(role: string, currentPath: string): string | null {
+  // If trying to access specific role area
+  if (currentPath === 'admin' && role !== 'ADMIN') {
+    return getDashboardPath(role)
+  }
+  if (currentPath === 'validator' && role !== 'VALIDATOR') {
+    return getDashboardPath(role)
+  }
+  if (currentPath === 'participant' && role !== 'PARTICIPANT') {
+    return getDashboardPath(role)
+  }
+  return null
 }
 

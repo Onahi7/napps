@@ -369,18 +369,48 @@ export async function getValidators() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) throw new Error('Unauthorized')
 
-  const result = await query(
-    `SELECT p.id, p.email, p.full_name, p.phone, p.created_at,
-            COUNT(s.id) as total_scans,
-            COUNT(CASE WHEN s.created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as today_scans
-     FROM profiles p
-     LEFT JOIN scans s ON s.scanned_by = p.id
-     WHERE p.role = 'validator'
-     GROUP BY p.id, p.email, p.full_name, p.phone, p.created_at
-     ORDER BY p.created_at DESC`
-  )
+  try {
+    const admin = await prisma.admin.findFirst({
+      where: { userId: session.user.id }
+    })
+    if (!admin) throw new Error('Unauthorized')
 
-  return result.rows
+    // Get all validators with user data and scan counts
+    const validators = await prisma.validator.findMany({
+      include: {
+        user: true,
+        scans: true
+      },
+      orderBy: {
+        user: {
+          createdAt: 'desc'
+        }
+      }
+    })
+
+    // Transform data to match expected format
+    return validators.map(validator => {
+      const totalScans = validator.scans.length
+      const todayScans = validator.scans.filter(scan => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return scan.scannedAt >= today
+      }).length
+
+      return {
+        id: validator.id,
+        email: validator.user.email,
+        full_name: validator.user.fullName,
+        phone: validator.user.phone,
+        created_at: validator.user.createdAt,
+        total_scans: totalScans,
+        today_scans: todayScans
+      }
+    })
+  } catch (error) {
+    console.error('Error getting validators:', error)
+    throw error
+  }
 }
 
 export async function createValidator(data: {
@@ -412,34 +442,46 @@ export async function createValidator(data: {
       throw new Error('Password must be at least 8 characters')
     }
 
-    // Hash password
-    const hashedPassword = await hash(data.password, 10)
-
-    return await query(
-      `WITH new_user AS (
-        INSERT INTO users (email, password_hash)
-        VALUES ($1, $2)
-        RETURNING id
-      )
-      INSERT INTO profiles (id, email, full_name, phone, role)
-      SELECT id, $1, $3, $4, 'validator'
-      FROM new_user
-      RETURNING id`,
-      [data.email, hashedPassword, data.full_name, data.phone]
-    ).then(result => {
-      revalidatePath('/admin/validators')
-      return result.rows[0].id
+    // Check if user already exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: data.email },
+          { phone: data.phone }
+        ]
+      }
     })
-  } catch (error: any) {
-    // Handle unique constraint violations
-    if (error.code === '23505') {
-      if (error.constraint === 'idx_profiles_email') {
-        throw new Error('This email is already in use')
-      }
-      if (error.constraint === 'idx_profiles_phone') {
-        throw new Error('This phone number is already in use')
-      }
+
+    if (existingUser) {
+      const field = existingUser.email === data.email ? 'email' : 'phone'
+      throw new Error(`This ${field} is already in use`)
     }
+
+    // Create validator in transaction
+    const { user, validator } = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: data.email,
+          password: await hash(data.password, 10),
+          fullName: data.full_name,
+          phone: data.phone,
+          role: 'VALIDATOR'
+        }
+      })
+
+      const validator = await tx.validator.create({
+        data: {
+          userId: user.id
+        }
+      })
+
+      return { user, validator }
+    })
+
+    revalidatePath('/admin/validators')
+    return validator.id
+  } catch (error) {
+    console.error('Error creating validator:', error)
     throw error
   }
 }

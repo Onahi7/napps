@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
-import { query } from '@/lib/db'
+import { PrismaClient } from '@prisma/client'
+import { revalidatePath } from 'next/cache'
+
+const prisma = new PrismaClient()
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,25 +26,40 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch all registrations - updated query to use LEFT JOIN
-    const result = await query(
-      `SELECT 
-        p.id,
-        p.full_name,
-        p.email,
-        p.phone,
-        p.school_name,
-        p.school_state,
-        p.napps_chapter,
-        p.payment_status,
-        p.accreditation_status,
-        p.created_at
-       FROM profiles p
-       ORDER BY p.created_at DESC`,
-      []
-    )
+    // Fetch all registrations with related data
+    const registrations = await prisma.participant.findMany({
+      include: {
+        user: {
+          select: {
+            fullName: true,
+            email: true,
+            phone: true,
+            createdAt: true
+          }
+        }
+      },
+      orderBy: {
+        user: {
+          createdAt: 'desc'
+        }
+      }
+    })
 
-    return NextResponse.json(result.rows)
+    // Transform data to match expected format
+    const formattedRegistrations = registrations.map(registration => ({
+      id: registration.id,
+      full_name: registration.user.fullName,
+      email: registration.user.email,
+      phone: registration.user.phone,
+      organization: registration.organization,
+      state: registration.state,
+      chapter: registration.chapter,
+      payment_status: registration.paymentStatus,
+      accreditation_status: registration.accreditationStatus,
+      created_at: registration.user.createdAt
+    }))
+
+    return NextResponse.json(formattedRegistrations)
   } catch (error: any) {
     console.error('Error fetching registrations:', error)
     return NextResponse.json(

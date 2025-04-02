@@ -313,3 +313,9 @@ export async function updateSystemConfig(config: Partial<SystemConfig>): Promise
   }
 }
 
+export async function setMaintenanceMode(enabled: boolean): Promise<boolean> {
+  return updateSystemConfig({
+    maintenanceMode: enabled
+  })
+}
+

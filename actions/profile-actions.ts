@@ -83,7 +83,6 @@ export async function updateProfile(data: {
           chapter: data.chapter,
           organization: data.organization,
           position: data.position,
-          
         }
       })
     ])

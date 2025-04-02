@@ -1,8 +1,8 @@
 "use client"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { signIn } from "next-auth/react"
+import { signIn, useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { data: session, status } = useSession()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams?.get('callbackUrl') || undefined
+  
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
@@ -22,19 +26,31 @@ export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email")
   const [isAdminLogin, setIsAdminLogin] = useState(false)
 
+  useEffect(() => {
+    // If already authenticated, redirect to appropriate dashboard
+    if (status === 'authenticated' && session?.user) {
+      const dashboardPath = session.user.role === 'ADMIN' 
+        ? '/admin/dashboard'
+        : session.user.role === 'VALIDATOR'
+          ? '/validator/dashboard'
+          : '/participant/dashboard'
+      router.replace(dashboardPath)
+    }
+  }, [status, session, router])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setIsLoading(true)
 
     try {
-      // Sign in with NextAuth
       const result = await signIn("credentials", {
         identifier: loginMethod === "email" ? email : phone,
-        password: isAdminLogin ? password : "",  // Only send password for admin login
+        password: isAdminLogin ? password : "",
         loginMethod,
         isAdmin: isAdminLogin.toString(),
         redirect: false,
+        callbackUrl
       })
 
       if (result?.error) {
@@ -43,15 +59,27 @@ export default function LoginPage() {
         return
       }
 
-      // Successful login - Redirect based on role
-      router.push(isAdminLogin ? "/admin/dashboard" : "/participant/dashboard")
+      // Let the auth provider handle the redirect
       router.refresh()
     } catch (err: any) {
       console.error("Login error:", err)
       setError(err.message || "An error occurred during login")
-    } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show loading state while session is being fetched
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Icons.spinner className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  // Don't show login form if already authenticated
+  if (status === 'authenticated') {
+    return null
   }
 
   return (
@@ -85,7 +113,7 @@ export default function LoginPage() {
                   checked={isAdminLogin}
                   onChange={() => {
                     setIsAdminLogin(!isAdminLogin)
-                    setError(null) // Clear any previous errors
+                    setError(null)
                   }}
                   className="h-4 w-4 rounded border-gray-300 text-napps-gold focus:ring-napps-gold"
                 />
@@ -181,10 +209,7 @@ export default function LoginPage() {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <>
-                    <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
+                  <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   "Sign In"
                 )}
