@@ -10,15 +10,14 @@ import { useAuth } from "@/lib/auth-hooks"
 import { getRegistrationAmount, getConferenceDetails, type ConferenceDetails } from "@/lib/config-service"
 import { getParticipantStatus } from "@/actions/profile-actions"
 import { ParticipantPayment } from "./participant-payment"
+import { PaymentStatus, AccredStatus } from '@prisma/client'
 
-type PaymentStatus = "pending" | "completed" | "proof_submitted"
-type AccreditationStatus = "pending" | "completed" | "declined"
-type AccommodationStatus = "not_booked" | "booked" | "checked_in"
+type AccommodationStatus = "NOT_BOOKED" | "BOOKED" | "CHECKED_IN"
 
 interface ParticipantStatus {
   payment: PaymentStatus;
   payment_proof: string | null;
-  accreditation: AccreditationStatus;
+  accreditation: AccredStatus;
   accommodation: AccommodationStatus;
 }
 
@@ -35,10 +34,11 @@ export function ParticipantDashboard() {
     accountName: ""
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [status, setStatus] = useState({
-    payment: "pending" as PaymentStatus,
-    accreditation: "pending" as AccreditationStatus,
-    accommodation: "not_booked" as AccommodationStatus
+  const [status, setStatus] = useState<ParticipantStatus>({
+    payment: "PENDING",
+    payment_proof: null,
+    accreditation: "PENDING",
+    accommodation: "NOT_BOOKED"
   })
   const [paymentProof, setPaymentProof] = useState<string | null>(null)
 
@@ -56,10 +56,10 @@ export function ParticipantDashboard() {
         if (participantStatus) {
           setStatus({
             payment: participantStatus.paymentStatus as PaymentStatus,
-            accreditation: participantStatus.accreditationStatus as AccreditationStatus,
-            accommodation: "not_booked" as AccommodationStatus // Fallback since this isn't provided by the API
+            payment_proof: null, // Since we don't get this from the API
+            accreditation: participantStatus.accreditationStatus as AccredStatus,
+            accommodation: "NOT_BOOKED" as AccommodationStatus
           })
-          setPaymentProof(null) // Payment proof will need to be added to the API response if needed
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error)
@@ -76,14 +76,14 @@ export function ParticipantDashboard() {
   const getBadgeVariant = (status: string, type: 'payment' | 'accreditation' | 'accommodation') => {
     switch (type) {
       case 'payment':
-        return status === "completed" ? "outline" : "secondary"
+        return status === "COMPLETED" ? "outline" : "secondary"
       case 'accreditation':
-        if (status === "completed") return "outline"
-        if (status === "declined") return "destructive"
+        if (status === "COMPLETED") return "outline"
+        if (status === "DECLINED") return "destructive"
         return "secondary"
       case 'accommodation':
-        if (status === "checked_in") return "outline"
-        if (status === "booked") return "default"
+        if (status === "CHECKED_IN") return "outline"
+        if (status === "BOOKED") return "default"
         return "secondary"
       default:
         return "default"
@@ -134,21 +134,21 @@ export function ParticipantDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {status.payment !== "completed" && (
+          {status.payment !== "COMPLETED" && (
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <span className="text-sm sm:text-base text-muted-foreground">Registration Fee:</span>
-              <span className="text-lg sm:text-xl font-bold">₦20000</span>
+              <span className="text-lg sm:text-xl font-bold">₦{registrationAmount}</span>
             </div>
           )}
           <Badge 
             variant={getBadgeVariant(status.payment, 'payment')} 
             className="whitespace-normal text-center w-full sm:w-auto"
           >
-            {status.payment === "completed" ? "Payment Approved" : 
-             status.payment === "proof_submitted" ? "Proof Submitted - Under Review" : 
+            {status.payment === "COMPLETED" ? "Payment Approved" : 
+             status.payment === "PROOF_SUBMITTED" ? "Proof Submitted - Under Review" : 
              "Pending Payment"}
           </Badge>
-          {status.payment !== "completed" && (
+          {status.payment !== "COMPLETED" && (
             <ParticipantPayment 
               amount={registrationAmount}
               phoneNumber={profile?.phone || ''}
@@ -157,7 +157,7 @@ export function ParticipantDashboard() {
             />
           )}
         </CardContent>
-        {status.payment !== "completed" && status.payment !== "proof_submitted" && (
+        {status.payment !== "COMPLETED" && status.payment !== "PROOF_SUBMITTED" && (
           <CardFooter>
             <Button asChild className="w-full" variant="gold">
               <Link href="/payment">Pay Now</Link>
@@ -176,9 +176,9 @@ export function ParticipantDashboard() {
         </CardHeader>
         <CardContent>
           <Badge variant={getBadgeVariant(status.accreditation, 'accreditation')} className="whitespace-normal text-center w-full sm:w-auto">
-            {status.accreditation === "completed"
+            {status.accreditation === "COMPLETED"
               ? "Accredited"
-              : status.accreditation === "declined"
+              : status.accreditation === "DECLINED"
               ? "Declined"
               : "Pending"}
           </Badge>
@@ -186,7 +186,7 @@ export function ParticipantDashboard() {
         <CardFooter>
           <Button asChild className="w-full" variant="gold">
             <Link href="/participant/accreditation">
-              {status.accreditation === "completed" ? "View Details" : "Get Accredited"}
+              {status.accreditation === "COMPLETED" ? "View Details" : "Get Accredited"}
             </Link>
           </Button>
         </CardFooter>
@@ -202,9 +202,9 @@ export function ParticipantDashboard() {
         </CardHeader>
         <CardContent>
           <Badge variant={getBadgeVariant(status.accommodation, 'accommodation')} className="whitespace-normal text-center w-full sm:w-auto">
-            {status.accommodation === "checked_in"
+            {status.accommodation === "CHECKED_IN"
               ? "Checked In"
-              : status.accommodation === "booked"
+              : status.accommodation === "BOOKED"
               ? "Booked"
               : "Not Booked"}
           </Badge>
@@ -212,9 +212,9 @@ export function ParticipantDashboard() {
         <CardFooter>
           <Button asChild className="w-full" variant="gold">
             <Link href="/participant/accommodation">
-              {status.accommodation === "checked_in"
+              {status.accommodation === "CHECKED_IN"
                 ? "View Details"
-                : status.accommodation === "booked"
+                : status.accommodation === "BOOKED"
                 ? "Manage Booking"
                 : "Book Now"}
             </Link>

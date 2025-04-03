@@ -41,21 +41,23 @@ export default function PaymentPage() {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      
+
       const response = await fetch('/api/upload-proof', {
         method: 'POST',
         body: formData
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error('Failed to upload payment proof')
+        throw new Error(data.error || 'Failed to upload payment proof')
       }
 
       setSuccessMessage("Payment proof uploaded successfully. Redirecting to dashboard...")
       
+      // Redirect to the dashboard payment section
       setTimeout(() => {
-        router.refresh()
-        router.push("/participant/dashboard")
+        router.push("/participant/dashboard?section=payment")
       }, 2000)
 
     } catch (error: any) {

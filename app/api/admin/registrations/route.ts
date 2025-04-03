@@ -51,11 +51,11 @@ export async function GET(request: NextRequest) {
       full_name: registration.user.fullName,
       email: registration.user.email,
       phone: registration.user.phone,
-      organization: registration.organization,
-      state: registration.state,
-      chapter: registration.chapter,
-      payment_status: registration.paymentStatus,
-      accreditation_status: registration.accreditationStatus,
+      school_name: registration.organization,
+      school_state: registration.state,
+      napps_chapter: registration.chapter,
+      payment_status: registration.paymentStatus.toLowerCase(),
+      accreditation_status: registration.accreditationStatus.toLowerCase(),
       created_at: registration.user.createdAt
     }))
 

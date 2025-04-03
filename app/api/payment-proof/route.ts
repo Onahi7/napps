@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { query, withTransaction } from '@/lib/db';
+import { PrismaClient } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+
+const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,16 +14,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // Always update to proof_submitted status
-    await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE profiles 
-         SET payment_status = 'proof_submitted',
-             payment_proof = 'whatsapp',
-             updated_at = NOW()
-         WHERE id = $1`,
-        [session.user.id]
-      );
+    // Find participant record
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id }
+    });
+
+    if (!participant) {
+      // Even if participant not found, return success
+      return NextResponse.json({ success: true });
+    }
+
+    // Update to proof_submitted status
+    await prisma.participant.update({
+      where: { id: participant.id },
+      data: {
+        paymentStatus: 'PROOF_SUBMITTED',
+        paymentProof: 'whatsapp'
+      }
     });
 
     // Revalidate all relevant pages

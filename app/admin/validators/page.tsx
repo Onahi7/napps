@@ -73,7 +73,7 @@ export default function AdminValidators() {
     name: "",
     email: "",
     phone: "",
-    role: "Breakfast",
+    password: ""
   })
 
   const handleAddValidator = async () => {
@@ -85,7 +85,7 @@ export default function AdminValidators() {
         },
         body: JSON.stringify({
           email: newValidator.email,
-          password: 'defaultPassword123',
+          password: newValidator.password,
           full_name: newValidator.name,
           phone: newValidator.phone
         }),
@@ -98,7 +98,7 @@ export default function AdminValidators() {
           name: '',
           email: '',
           phone: '',
-          role: 'Breakfast',
+          password: ''
         })
       } else {
         throw new Error(data.error)
@@ -152,6 +152,7 @@ export default function AdminValidators() {
                       value={newValidator.name}
                       onChange={(e) => setNewValidator({ ...newValidator, name: e.target.value })}
                       className="border-napps-green/30 focus-visible:ring-napps-green"
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -162,6 +163,19 @@ export default function AdminValidators() {
                       value={newValidator.email}
                       onChange={(e) => setNewValidator({ ...newValidator, email: e.target.value })}
                       className="border-napps-green/30 focus-visible:ring-napps-green"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={newValidator.password}
+                      onChange={(e) => setNewValidator({ ...newValidator, password: e.target.value })}
+                      className="border-napps-green/30 focus-visible:ring-napps-green"
+                      required
+                      minLength={8}
                     />
                   </div>
                   <div className="space-y-2">
@@ -171,6 +185,7 @@ export default function AdminValidators() {
                       value={newValidator.phone}
                       onChange={(e) => setNewValidator({ ...newValidator, phone: e.target.value })}
                       className="border-napps-green/30 focus-visible:ring-napps-green"
+                      required
                     />
                   </div>
                 </div>

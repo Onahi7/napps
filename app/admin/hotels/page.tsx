@@ -185,28 +185,20 @@ export default function AdminHotelsPage() {
         // Add imageUrl to hotelData after upload
       }
 
-      const result = await createHotel(hotelData)
-
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: "Hotel added successfully",
-        })
-        resetForm()
-        setIsAddDialogOpen(false)
-        fetchHotels()
-      } else {
-        toast({
-          title: "Error",
-          description: (result as { error?: string }).error || "Failed to add hotel",
-          variant: "destructive",
-        })
-      }
+      await createHotel(hotelData)
+      
+      toast({
+        title: "Success",
+        description: "Hotel added successfully",
+      })
+      resetForm()
+      setIsAddDialogOpen(false)
+      fetchHotels()
     } catch (error) {
       console.error("Error adding hotel:", error)
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive",
       })
     } finally {
@@ -414,9 +406,9 @@ export default function AdminHotelsPage() {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="economy">Economy</SelectItem>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="premium">Premium</SelectItem>
+                        <SelectItem value="ECONOMY">Economy</SelectItem>
+                        <SelectItem value="STANDARD">Standard</SelectItem>
+                        <SelectItem value="PREMIUM">Premium</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -572,9 +564,9 @@ export default function AdminHotelsPage() {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="economy">Economy</SelectItem>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="premium">Premium</SelectItem>
+                        <SelectItem value="ECONOMY">Economy</SelectItem>
+                        <SelectItem value="STANDARD">Standard</SelectItem>
+                        <SelectItem value="PREMIUM">Premium</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -718,14 +710,14 @@ export default function AdminHotelsPage() {
               {hotel.featured && <Badge className="absolute top-2 right-2 bg-primary">Featured</Badge>}
               <Badge
                 className={`absolute bottom-2 left-2 ${
-                  hotel.price_category === "economy"
+                  (hotel.priceCategory || '').toLowerCase() === "economy"
                     ? "bg-blue-500"
-                    : hotel.price_category === "standard"
+                    : (hotel.priceCategory || '').toLowerCase() === "standard"
                       ? "bg-purple-500"
                       : "bg-amber-500"
                 }`}
               >
-                {hotel.price_category.charAt(0).toUpperCase() + hotel.price_category.slice(1)}
+                {hotel.priceCategory ? hotel.priceCategory.charAt(0) + hotel.priceCategory.slice(1).toLowerCase() : 'Unknown'}
               </Badge>
             </div>
             <CardHeader>

@@ -1,19 +1,43 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Download, Users, School, Filter } from "lucide-react"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { AdminRegistrationList } from "@/components/admin-registration-list"
+import { getRegistrationStats } from "@/actions/analytics-actions"
 
 export default function AdminRegistrationsPage() {
+  const [stats, setStats] = useState({
+    total: 0,
+    by_state: [] as { state: string; count: number }[],
+    completion_rate: 0,
+    payment: {
+      completed: 0,
+      pending: 0,
+      proof_submitted: 0
+    }
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const data = await getRegistrationStats()
+        setStats(data)
+      } catch (error) {
+        console.error('Error loading stats:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadStats()
+  }, [])
+
   return (
     <div className="grid min-h-screen w-full md:grid-cols-[auto_1fr]">
       <DashboardSidebar role="admin" />
@@ -38,10 +62,14 @@ export default function AdminRegistrationsPage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">Loading...</div>
+                <div className="text-2xl font-bold">{loading ? "..." : stats.total}</div>
                 <div className="flex justify-between mt-2">
-                  <p className="text-xs text-muted-foreground">Completed: --</p>
-                  <p className="text-xs text-muted-foreground">Pending: --</p>
+                  <p className="text-xs text-muted-foreground">
+                    Completed: {loading ? "--" : stats.payment.completed}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Pending: {loading ? "--" : (stats.payment.pending + stats.payment.proof_submitted)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -52,7 +80,9 @@ export default function AdminRegistrationsPage() {
                 <School className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">Loading...</div>
+                <div className="text-2xl font-bold">
+                  {loading ? "..." : stats.by_state.reduce((sum, state) => sum + state.count, 0)}
+                </div>
                 <p className="text-xs text-muted-foreground">From different states</p>
               </CardContent>
             </Card>

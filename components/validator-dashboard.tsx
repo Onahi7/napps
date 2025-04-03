@@ -15,22 +15,26 @@ import { useToast } from "@/hooks/use-toast"
 import { getAllAssignments } from "@/actions/assignment-actions"
 import type { ScanType, AssignmentStatus } from '@prisma/client'
 
-interface Assignment {
-  id: string
-  location: string
-  date: string
-  startTime: string
-  endTime: string
-  type: ScanType
-  status: AssignmentStatus
-  validatorId: string
-  validatorName: string
-  validatorPhone: string
+interface ScanStats {
+  today_scans: number;
+  recent: Array<{
+    participant_name: string;
+    time: string;
+    type: ScanType;
+  }>;
 }
 
-interface ScanStats {
-  today_scans: number
-  recent: Array<{ participant_name: string; time: string; type: string }>
+interface Assignment {
+  id: string;
+  location: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  type: ScanType;
+  status: AssignmentStatus;
+  validatorId: string;
+  validatorName: string;
+  validatorPhone: string;
 }
 
 export default function ValidatorDashboard() {

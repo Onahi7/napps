@@ -38,19 +38,19 @@ export async function createHotel(data: {
         pricePerNight: data.pricePerNight,
         priceCategory: data.priceCategory,
         availableRooms: data.availableRooms,
-        description: data.description,
+        description: data.description || '',
         amenities: data.amenities || [],
-        contactPhone: data.contactPhone,
-        contactWhatsapp: data.contactWhatsapp,
-        distanceFromVenue: data.distanceFromVenue,
-        rating: data.rating,
+        contactPhone: data.contactPhone || '',
+        contactWhatsapp: data.contactWhatsapp || '',
+        distanceFromVenue: data.distanceFromVenue || 0,
+        rating: data.rating || 0,
         imageUrl: data.imageUrl,
-        isFeatured: data.isFeatured
+        isFeatured: data.isFeatured || false
       }
     })
 
     revalidatePath('/admin/hotels')
-    return { success: true, hotel }
+    return hotel
   } catch (error) {
     console.error('Error creating hotel:', error)
     throw error

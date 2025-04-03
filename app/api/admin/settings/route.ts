@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
-import { query, withTransaction } from '@/lib/db'
+import { PrismaClient } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
+
+const prisma = new PrismaClient()
 
 interface ConferenceConfig {
   name: string;
@@ -50,12 +52,14 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const result = await query('SELECT * FROM config')
-    const settings = result.rows.reduce((acc: any, row) => {
+    const configs = await prisma.config.findMany()
+    const settings = configs.reduce((acc: any, config) => {
       try {
-        acc[row.key] = JSON.parse(row.value)
+        acc[config.key] = typeof config.value === 'string' ? 
+          JSON.parse(config.value as string) : 
+          config.value
       } catch {
-        acc[row.key] = row.value
+        acc[config.key] = config.value
       }
       return acc
     }, {})
@@ -91,23 +95,25 @@ export async function POST(request: NextRequest) {
 
     const { conference, system } = await request.json()
 
-    await withTransaction(async (client) => {
-      // Update conference settings
-      await client.query(
-        `INSERT INTO config (key, value)
-         VALUES ('conference', $1)
-         ON CONFLICT (key) DO UPDATE SET value = $1`,
-        [JSON.stringify(conference)]
-      )
-
-      // Update system settings
-      await client.query(
-        `INSERT INTO config (key, value)
-         VALUES ('system', $1)
-         ON CONFLICT (key) DO UPDATE SET value = $1`,
-        [JSON.stringify(system)]
-      )
-    })
+    // Use Prisma transaction to update both configs
+    await prisma.$transaction([
+      prisma.config.upsert({
+        where: { key: 'conference' },
+        update: { value: JSON.stringify(conference) },
+        create: {
+          key: 'conference',
+          value: JSON.stringify(conference)
+        }
+      }),
+      prisma.config.upsert({
+        where: { key: 'system' },
+        update: { value: JSON.stringify(system) },
+        create: {
+          key: 'system',
+          value: JSON.stringify(system)
+        }
+      })
+    ])
 
     // Revalidate all pages that might use these settings
     revalidatePath('/admin/settings')

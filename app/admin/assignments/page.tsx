@@ -63,7 +63,16 @@ export default function AdminAssignments() {
         getValidators()
       ])
       setAssignments(assignmentData)
-      setValidators(validatorData)
+      // Map validator data to match interface
+      const mappedValidators = validatorData.map(v => ({
+        id: v.id,
+        fullName: v.full_name,
+        email: v.email,
+        phone: v.phone,
+        totalScans: v.total_scans,
+        activeAssignments: 0 // This can be calculated if needed
+      }))
+      setValidators(mappedValidators)
     } catch (error) {
       console.error('Error loading data:', error)
       toast({

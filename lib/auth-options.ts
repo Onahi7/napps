@@ -16,13 +16,18 @@ export const authOptions: AuthOptions = {
         isAdmin: { label: "Is Admin", type: "text" }
       },
       async authorize(credentials) {
-        if (!credentials?.identifier) return null
+        if (!credentials?.identifier) {
+          console.log("Auth failed: No identifier provided")
+          return null
+        }
 
         try {
+          console.log(`Auth attempt: ${credentials.identifier} via ${credentials.loginMethod}`)
+          
           const isEmailLogin = credentials.loginMethod === "email"
           const where = isEmailLogin 
-            ? { email: credentials.identifier }
-            : { phone: credentials.identifier }
+            ? { email: credentials.identifier.toLowerCase().trim() }
+            : { phone: credentials.identifier.trim() }
 
           // Find user with role-specific data
           const user = await prisma.user.findFirst({
@@ -34,7 +39,12 @@ export const authOptions: AuthOptions = {
             }
           })
 
-          if (!user) return null
+          if (!user) {
+            console.log(`Auth failed: User not found for ${credentials.identifier}`)
+            return null
+          }
+
+          console.log(`User found: ${user.email}, role: ${user.role}`)
 
           const baseUser = {
             id: user.id,
@@ -58,17 +68,33 @@ export const authOptions: AuthOptions = {
           }
 
           const isAdminLogin = credentials.isAdmin === 'true'
+          console.log(`Admin login attempt: ${isAdminLogin}`)
 
           // For regular participants, allow phone-only login
           if (!isAdminLogin && user.role === 'PARTICIPANT') {
+            console.log("Participant login successful without password")
             return baseUser
           }
 
           // For admin/validator/admin login attempts, require password
           if (isAdminLogin || user.role === 'ADMIN' || user.role === 'VALIDATOR') {
-            if (!credentials.password) return null
+            if (!credentials.password) {
+              console.log("Auth failed: Password required for admin/validator")
+              return null
+            }
+            
+            if (!user.password) {
+              console.log("Auth failed: User has no password set")
+              return null
+            }
+            
             const isValid = await compare(credentials.password, user.password)
-            if (!isValid) return null
+            if (!isValid) {
+              console.log("Auth failed: Invalid password")
+              return null
+            }
+            
+            console.log("Admin/validator login successful")
           }
 
           return baseUser
@@ -80,7 +106,7 @@ export const authOptions: AuthOptions = {
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
         token.role = user.role
@@ -94,6 +120,40 @@ export const authOptions: AuthOptions = {
         token.position = user.position
         token.full_name = user.full_name
       }
+
+      // Handle token refresh
+      if (trigger === "update" && token.error) {
+        delete token.error
+      }
+
+      // Check token expiration
+      const tokenExpiry = token.exp as number
+      const currentTime = Math.floor(Date.now() / 1000)
+      
+      // If token is about to expire in the next hour, refresh it
+      if (tokenExpiry && tokenExpiry - currentTime < 3600) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            include: {
+              participant: true,
+              validator: true,
+              admin: true
+            }
+          })
+
+          if (user) {
+            // Update token with fresh data
+            token.payment_status = user.participant?.paymentStatus || 'PENDING'
+            token.accreditation_status = user.participant?.accreditationStatus || 'PENDING'
+            token.exp = Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Extend by 24 hours
+          }
+        } catch (error) {
+          console.error('Token refresh error:', error)
+          token.error = 'RefreshAccessTokenError'
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
@@ -109,6 +169,10 @@ export const authOptions: AuthOptions = {
         session.user.organization = token.organization as string
         session.user.position = token.position as string
         session.user.full_name = token.full_name as string
+        
+        if (token.error) {
+          session.error = token.error
+        }
       }
       return session
     }
@@ -119,7 +183,8 @@ export const authOptions: AuthOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60 // 30 days
+    maxAge: 24 * 60 * 60, // 24 hours initial session
+    updateAge: 60 * 60 // Update session every hour
   }
 }
 

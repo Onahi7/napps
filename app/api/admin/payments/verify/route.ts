@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
-import { query, withTransaction } from '@/lib/db'
+import { PrismaClient } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
+
+const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,42 +35,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return await withTransaction(async (client) => {
-      // Get the user profile 
-      const result = await client.query(
-        'SELECT payment_status FROM profiles WHERE phone = $1',
-        [phone]
-      )
-
-      if (result.rows.length === 0) {
-        return NextResponse.json(
-          { error: 'Payment not found' },
-          { status: 404 }
-        )
-      }
-
-      // Only allow verifying payments that have proof submitted
-      if (result.rows[0].payment_status !== 'proof_submitted') {
-        return NextResponse.json(
-          { error: 'Payment proof has not been submitted' },
-          { status: 400 }
-        )
-      }
-
-      // Update payment status to completed
-      await client.query(
-        `UPDATE profiles 
-         SET payment_status = 'completed',
-             updated_at = NOW()
-         WHERE phone = $1`,
-        [phone]
-      )
-
-      revalidatePath('/admin/payments')
-      revalidatePath('/participant/dashboard')
-
-      return NextResponse.json({ success: true })
+    // Find the user by phone number first
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      include: { participant: true }
     })
+
+    if (!user || !user.participant) {
+      return NextResponse.json(
+        { error: 'Payment not found' },
+        { status: 404 }
+      )
+    }
+
+    // Only allow verifying payments that have proof submitted
+    if (user.participant.paymentStatus !== 'PROOF_SUBMITTED') {
+      return NextResponse.json(
+        { error: 'Payment proof has not been submitted' },
+        { status: 400 }
+      )
+    }
+
+    // Update payment status to completed
+    await prisma.participant.update({
+      where: { id: user.participant.id },
+      data: {
+        paymentStatus: 'COMPLETED'
+      }
+    })
+
+    revalidatePath('/admin/payments')
+    revalidatePath('/participant/dashboard')
+
+    return NextResponse.json({ success: true })
   } catch (error: any) {
     console.error('Payment verification error:', error)
     return NextResponse.json(

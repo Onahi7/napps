@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { isAdmin } from '@/lib/auth'
-import { query } from '@/lib/db'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,13 +25,26 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const result = await query(`
-      SELECT id, name, description
-      FROM permissions
-      ORDER BY name
-    `)
+    // Get distinct access types from ResourceAccess
+    const accessTypes = await prisma.resourceAccess.findMany({
+      distinct: ['accessType'],
+      select: {
+        accessType: true
+      }
+    })
 
-    return NextResponse.json(result.rows)
+    // Transform to match expected format
+    const permissions = accessTypes.map(access => ({
+      id: access.accessType,
+      name: access.accessType,
+      description: access.accessType === 'VIEW' 
+        ? 'Permission to view resources' 
+        : access.accessType === 'DOWNLOAD' 
+        ? 'Permission to download resources'
+        : 'Unknown permission type'
+    }))
+
+    return NextResponse.json(permissions)
   } catch (error: any) {
     console.error('Error fetching permissions:', error)
     return NextResponse.json(
@@ -58,22 +73,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, description } = await request.json()
+    const { participantId, resourceId, accessType } = await request.json()
 
     // Validate input
-    if (!name) {
+    if (!participantId || !resourceId || !accessType) {
       return NextResponse.json(
-        { error: 'Permission name is required' },
+        { error: 'Participant ID, Resource ID and Access Type are required' },
         { status: 400 }
       )
     }
 
-    const result = await query(
-      'INSERT INTO permissions (name, description) VALUES ($1, $2) RETURNING id',
-      [name, description]
-    )
+    // Create new resource access
+    const resourceAccess = await prisma.resourceAccess.create({
+      data: {
+        participantId,
+        resourceId,
+        accessType
+      }
+    })
 
-    return NextResponse.json({ id: result.rows[0].id })
+    return NextResponse.json({ id: resourceAccess.id })
   } catch (error: any) {
     console.error('Error creating permission:', error)
     return NextResponse.json(
@@ -112,10 +131,10 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    await query(
-      'DELETE FROM permissions WHERE id = $1',
-      [permissionId]
-    )
+    // Delete the resource access
+    await prisma.resourceAccess.delete({
+      where: { id: permissionId }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

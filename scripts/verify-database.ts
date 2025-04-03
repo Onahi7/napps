@@ -1,69 +1,59 @@
-import { Pool } from 'pg';
-import * as dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client'
+import { DatabaseMaintenance } from '../lib/db-maintenance'
+import { pool } from '../lib/db'
 
-dotenv.config();
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-    checkServerIdentity: () => undefined
-  }
-});
+const prisma = new PrismaClient()
 
 async function verifyDatabase() {
   try {
-    // Check if tables exist
-    console.log('\nChecking database tables...');
-    const tables = await pool.query(`
-      SELECT table_name 
+    // Check Prisma connection
+    console.log('\nChecking Prisma connection...')
+    await prisma.$connect()
+    console.log('Prisma connection successful')
+
+    // Check database connection
+    console.log('\nChecking database connection...')
+    await pool.query('SELECT NOW()')
+    console.log('Database connection successful')
+
+    // Check models using Prisma schema metadata
+    console.log('\nChecking Prisma models...')
+    const models = await prisma.$queryRaw`
+      SELECT table_name
       FROM information_schema.tables 
       WHERE table_schema = 'public'
-      ORDER BY table_name;
-    `);
-    console.log('Existing tables:');
-    console.log(tables.rows.map(r => r.table_name).join('\n'));
+      AND table_name IN ('User', 'Participant', 'Validator', 'Admin', 'Scan', 'Config')
+      ORDER BY table_name
+    `
+    console.log('Existing models:')
+    console.log(models)
 
-    // Check config values
-    console.log('\nChecking configuration values...');
-    const config = await pool.query('SELECT key, value FROM config');
-    console.log('Configuration values:');
-    console.log(JSON.stringify(config.rows, null, 2));
+    // Check config values using Prisma
+    console.log('\nChecking configuration values...')
+    const config = await prisma.config.findMany({
+      select: {
+        key: true,
+        value: true
+      }
+    })
+    console.log('Configuration values:')
+    console.log(JSON.stringify(config, null, 2))
 
-    // Check if extensions are installed
-    console.log('\nChecking installed extensions...');
-    const extensions = await pool.query(`
-      SELECT extname 
-      FROM pg_extension;
-    `);
-    console.log('Installed extensions:');
-    console.log(extensions.rows.map(r => r.extname).join('\n'));
+    // Use DatabaseMaintenance for advanced checks
+    const maintenance = DatabaseMaintenance.getInstance()
+    const status = await maintenance.checkStatus()
+    
+    console.log('\nDatabase Status:')
+    console.log(JSON.stringify(status, null, 2))
 
-    // Check users table structure
-    console.log('\nChecking users table structure...');
-    const userColumns = await pool.query(`
-      SELECT column_name, data_type, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'users';
-    `);
-    console.log('Users table columns:');
-    console.log(JSON.stringify(userColumns.rows, null, 2));
+    await prisma.$disconnect()
+    await pool.end()
 
-    // Check profiles table structure
-    console.log('\nChecking profiles table structure...');
-    const profileColumns = await pool.query(`
-      SELECT column_name, data_type, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'profiles';
-    `);
-    console.log('Profiles table columns:');
-    console.log(JSON.stringify(profileColumns.rows, null, 2));
-
-    await pool.end();
+    console.log('\nDatabase verification completed successfully')
   } catch (err) {
-    console.error('Error:', err);
-    process.exit(1);
+    console.error('Error:', err)
+    process.exit(1)
   }
 }
 
-verifyDatabase();
+verifyDatabase()

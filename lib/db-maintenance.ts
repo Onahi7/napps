@@ -1,15 +1,18 @@
-import { Pool } from 'pg'
+import { PrismaClient } from '@prisma/client'
 import { DatabaseMonitor } from './db-monitor'
+import { Pool } from 'pg'
 import { pool } from './db'
 
 export class DatabaseMaintenance {
   private static instance: DatabaseMaintenance;
-  private pool: Pool
-  private monitor: DatabaseMonitor
+  private prisma: PrismaClient;
+  private pool: Pool;
+  private monitor: DatabaseMonitor;
 
   private constructor() {
-    this.pool = pool
-    this.monitor = DatabaseMonitor.getInstance()
+    this.prisma = new PrismaClient();
+    this.pool = pool;
+    this.monitor = DatabaseMonitor.getInstance();
   }
 
   public static getInstance(): DatabaseMaintenance {
@@ -25,16 +28,16 @@ export class DatabaseMaintenance {
       // Disable statement timeout for maintenance operations
       await client.query('SET statement_timeout = 0')
       
-      // Get list of tables
-      const tables = await client.query(`
+      // Get all Prisma model tables
+      const tables = await this.prisma.$queryRaw`
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public'
-      `)
+      `
 
       // Vacuum analyze each table
-      for (const table of tables.rows) {
-        await client.query(`VACUUM ANALYZE ${table.table_name}`)
+      for (const table of tables as any[]) {
+        await client.query(`VACUUM ANALYZE "${table.table_name}"`)
       }
     } finally {
       client.release()
@@ -52,27 +55,20 @@ export class DatabaseMaintenance {
   }
 
   async cleanupOldScans(daysToKeep: number = 30): Promise<void> {
-    await this.pool.query(
-      'DELETE FROM scans WHERE created_at < NOW() - INTERVAL \'$1 days\'',
-      [daysToKeep]
-    )
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+    await this.prisma.scan.deleteMany({
+      where: {
+        scannedAt: {
+          lt: cutoffDate
+        }
+      }
+    });
   }
 
-  async optimizeSearchVectors(): Promise<void> {
-    await this.pool.query(`
-      UPDATE profiles 
-      SET search_vector = 
-        setweight(to_tsvector('english', COALESCE(full_name, '')), 'A') ||
-        setweight(to_tsvector('english', COALESCE(email, '')), 'B') ||
-        setweight(to_tsvector('english', COALESCE(organization, '')), 'C') ||
-        setweight(to_tsvector('english', COALESCE(state, '')), 'D') ||
-        setweight(to_tsvector('english', COALESCE(chapter, '')), 'D')
-      WHERE search_vector IS NULL OR updated_at > 
-        (SELECT MAX(created_at) FROM scans WHERE user_id = profiles.id)
-    `)
-  }
-
-  async getTableStats(): Promise<Record<string, any>> {
+  async getTableStats(): Promise<Record<string, any>[]> {
+    // This still needs raw SQL as it accesses system tables
     const stats = await this.pool.query(`
       SELECT 
         schemaname,
@@ -92,19 +88,21 @@ export class DatabaseMaintenance {
   }
 
   async getDatabaseSize(): Promise<Record<string, any>> {
+    // This still needs raw SQL as it accesses system functions
     const size = await this.pool.query(`
       SELECT 
         pg_size_pretty(pg_database_size(current_database())) as total_size,
-        pg_size_pretty(pg_total_relation_size('users')) as users_size,
-        pg_size_pretty(pg_total_relation_size('profiles')) as profiles_size,
-        pg_size_pretty(pg_total_relation_size('scans')) as scans_size,
-        pg_size_pretty(pg_total_relation_size('bookings')) as bookings_size
+        pg_size_pretty(pg_table_size('"User"')) as users_size,
+        pg_size_pretty(pg_table_size('"Participant"')) as participants_size,
+        pg_size_pretty(pg_table_size('"Scan"')) as scans_size,
+        pg_size_pretty(pg_table_size('"Accommodation"')) as accommodations_size
     `)
 
     return size.rows[0]
   }
 
   async getConnectionStats(): Promise<Record<string, any>> {
+    // This still needs raw SQL as it accesses system tables
     const stats = await this.pool.query(`
       SELECT 
         count(*) as total_connections,
@@ -122,6 +120,7 @@ export class DatabaseMaintenance {
   }
 
   async killIdleConnections(): Promise<void> {
+    // This still needs raw SQL for connection management
     await this.pool.query(`
       SELECT pg_terminate_backend(pid)
       FROM pg_stat_activity
@@ -133,20 +132,53 @@ export class DatabaseMaintenance {
   }
 
   async resetPoolConnections(): Promise<void> {
-    await this.pool.end()
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    await this.pool.connect() // Test new connection
+    await this.prisma.$disconnect();
+    await this.pool.end();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await this.pool.connect();
+    await this.prisma.$connect();
+  }
+
+  async optimizeSearchVectors(): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      // Disable statement timeout for maintenance operations
+      await client.query('SET statement_timeout = 0');
+      
+      // Get tables with tsvector columns
+      const vectorTables = await client.query(`
+        SELECT DISTINCT c.table_name, c.column_name
+        FROM information_schema.columns c
+        JOIN information_schema.tables t 
+          ON c.table_name = t.table_name
+        WHERE c.data_type = 'tsvector'
+          AND t.table_schema = 'public'
+      `);
+
+      // Reindex tsvector columns
+      for (const row of vectorTables.rows) {
+        await client.query(`
+          REINDEX INDEX CONCURRENTLY (
+            SELECT indexname 
+            FROM pg_indexes 
+            WHERE tablename = $1 
+              AND indexdef LIKE '%tsvector%'
+          )
+        `, [row.table_name]);
+      }
+    } finally {
+      client.release();
+    }
   }
 
   async runMaintenance(): Promise<void> {
     try {
-      await this.killIdleConnections()
-      await this.vacuumAnalyze()
-      await this.optimizeSearchVectors()
-      await this.cleanupOldScans()
+      await this.killIdleConnections();
+      await this.vacuumAnalyze();
+      await this.cleanupOldScans();
     } catch (error) {
-      console.error('Database maintenance failed:', error)
-      throw error
+      console.error('Database maintenance failed:', error);
+      throw error;
     }
   }
 

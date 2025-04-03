@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { isAdmin } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // GET endpoint to retrieve all payment submissions
 export async function GET(request: NextRequest) {
@@ -25,27 +27,39 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all payment submissions with a focus on those with proof submitted
-    const result = await query(`
-      SELECT 
-        p.id, 
-        p.full_name, 
-        p.email, 
-        p.phone, 
-        p.payment_status, 
-        p.payment_amount, 
-        p.payment_proof, 
-        p.created_at
-      FROM profiles p
-      ORDER BY 
-        CASE 
-          WHEN p.payment_status = 'proof_submitted' THEN 1
-          WHEN p.payment_status = 'completed' THEN 2
-          ELSE 3 
-        END,
-        p.created_at DESC
-    `);
+    const payments = await prisma.participant.findMany({
+      include: {
+        user: {
+          select: {
+            fullName: true,
+            email: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: [
+        {
+          paymentStatus: 'asc'
+        },
+        {
+          paymentDate: 'desc'
+        }
+      ]
+    });
 
-    return NextResponse.json(result.rows);
+    // Transform to match expected format
+    const formattedPayments = payments.map(p => ({
+      id: p.id,
+      full_name: p.user.fullName,
+      email: p.user.email,
+      phone: p.user.phone,
+      payment_status: p.paymentStatus,
+      payment_amount: p.paymentAmount,
+      payment_proof: p.paymentProof,
+      created_at: p.paymentDate
+    }));
+
+    return NextResponse.json(formattedPayments);
   } catch (error: any) {
     console.error('Error fetching payments:', error);
     return NextResponse.json(

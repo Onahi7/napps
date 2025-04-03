@@ -8,7 +8,7 @@ import Link from "next/link"
 import { getUsersByRole } from "@/actions/user-actions"
 import { getRegistrationAmount, getConferenceDetails } from "@/lib/config-service"
 import { getResourceStats } from "@/actions/resource-actions"
-import type { ResourceType } from "@prisma/client"
+import type { ResourceType, PaymentStatus, AccredStatus, UserRole } from '@prisma/client'
 
 interface ResourceStats {
   total_resources: number;
@@ -21,8 +21,15 @@ interface ResourceStats {
 }
 
 export function AdminDashboard() {
-  const [participants, setParticipants] = useState<any[]>([])
-  const [validators, setValidators] = useState<any[]>([])
+  const [participants, setParticipants] = useState<Array<{
+    id: string;
+    payment_status: PaymentStatus;
+    accreditation_status: AccredStatus;
+  }>>([])
+  const [validators, setValidators] = useState<Array<{
+    id: string;
+    status: string;
+  }>>([])
   const [registrationAmount, setRegistrationAmount] = useState<number>(0)
   const [conferenceDetails, setConferenceDetails] = useState({
     name: "",
@@ -49,8 +56,15 @@ export function AdminDashboard() {
           getResourceStats()
         ])
 
-        setParticipants(participantsData)
-        setValidators(validatorsData)
+        setParticipants(participantsData.map(p => ({
+          id: p.id,
+          payment_status: p.paymentStatus || "PENDING",
+          accreditation_status: p.accreditationStatus || "PENDING"
+        })))
+        setValidators(validatorsData.map(v => ({
+          id: v.id,
+          status: v.accreditationStatus === "COMPLETED" ? "active" : "pending"
+        })))
         setRegistrationAmount(amount)
         setResourceStats(stats)
 
@@ -73,10 +87,10 @@ export function AdminDashboard() {
 
   // Calculate statistics
   const totalParticipants = participants.length
-  const paidParticipants = participants.filter((p) => p.payment_status === "paid").length
+  const paidParticipants = participants.filter((p) => p.payment_status === "COMPLETED").length
   const pendingParticipants = totalParticipants - paidParticipants
   const totalRevenue = paidParticipants * registrationAmount
-  const accreditedParticipants = participants.filter((p) => p.accreditation_status === "approved").length
+  const accreditedParticipants = participants.filter((p) => p.accreditation_status === "COMPLETED").length
 
   if (isLoading) {
     return (

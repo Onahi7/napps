@@ -12,6 +12,18 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { School } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+// Helper function to get the appropriate dashboard path
+const getDashboardPath = (role: string): string => {
+  switch (role) {
+    case 'ADMIN':
+      return '/admin/dashboard'
+    case 'VALIDATOR':
+      return '/validator/dashboard'
+    default:
+      return '/participant/dashboard'
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -19,7 +31,7 @@ export default function LoginPage() {
   const callbackUrl = searchParams?.get('callbackUrl') || undefined
   
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(searchParams?.get('error') || null)
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
@@ -27,7 +39,6 @@ export default function LoginPage() {
   const [isAdminLogin, setIsAdminLogin] = useState(false)
 
   useEffect(() => {
-    // If already authenticated, redirect to appropriate dashboard
     if (status === 'authenticated' && session?.user) {
       const dashboardPath = session.user.role === 'ADMIN' 
         ? '/admin/dashboard'
@@ -44,23 +55,25 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      // Use direct redirection instead of manual handling
+      const targetUrl = getDashboardPath(
+        isAdminLogin ? "ADMIN" : "PARTICIPANT" // Default assumption based on login type
+      )
+      
       const result = await signIn("credentials", {
         identifier: loginMethod === "email" ? email : phone,
         password: isAdminLogin ? password : "",
         loginMethod,
         isAdmin: isAdminLogin.toString(),
-        redirect: false,
-        callbackUrl
+        redirect: true,
+        callbackUrl: targetUrl
       })
-
+      
+      // We won't reach here if redirect: true is used, but keeping as fallback
       if (result?.error) {
         setError("Invalid credentials. Please try again.")
         setIsLoading(false)
-        return
       }
-
-      // Let the auth provider handle the redirect
-      router.refresh()
     } catch (err: any) {
       console.error("Login error:", err)
       setError(err.message || "An error occurred during login")
@@ -82,6 +95,7 @@ export default function LoginPage() {
     return null
   }
 
+  // Render login form
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="absolute right-4 top-4">

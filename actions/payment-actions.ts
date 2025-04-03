@@ -25,27 +25,51 @@ export async function uploadPaymentProof(data: {
     })
     if (!participant) throw new Error('Not a participant')
 
-    // Upload proof to Cloudinary
-    const buffer = await data.file.arrayBuffer()
-    const uploadResult = await uploadToCloudinary(Buffer.from(buffer))
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
+    if (!allowedTypes.includes(data.file.type)) {
+      throw new Error('Invalid file type. Please upload an image (JPG/PNG) or PDF')
+    }
 
-    // Update participant with payment info
-    await prisma.participant.update({
-      where: { id: participant.id },
-      data: {
-        paymentAmount: data.amount,
-        paymentProof: uploadResult.secure_url,
-        paymentStatus: 'PROOF_SUBMITTED',
-        paymentDate: new Date()
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (data.file.size > maxSize) {
+      throw new Error('File size too large. Maximum size is 5MB')
+    }
+
+    try {
+      // Upload proof to Cloudinary
+      const buffer = await data.file.arrayBuffer()
+      const uploadResult = await uploadToCloudinary(Buffer.from(buffer), {
+        folder: 'payment-proofs',
+        allowedFormats: ['jpg', 'jpeg', 'png', 'pdf']
+      })
+
+      if (!uploadResult?.secure_url) {
+        throw new Error('Failed to get upload URL from Cloudinary')
       }
-    })
 
-    revalidatePath('/participant/payment')
-    revalidatePath('/admin/payments')
-    return participant.id
+      // Update participant with payment info
+      await prisma.participant.update({
+        where: { id: participant.id },
+        data: {
+          paymentAmount: data.amount,
+          paymentProof: uploadResult.secure_url,
+          paymentStatus: 'PROOF_SUBMITTED',
+          paymentDate: new Date()
+        }
+      })
+
+      revalidatePath('/participant/payment')
+      revalidatePath('/admin/payments')
+      return participant.id
+    } catch (uploadError) {
+      console.error('Error uploading to Cloudinary:', uploadError)
+      throw new Error('Failed to upload payment proof. Please check your internet connection and try again.')
+    }
   } catch (error) {
-    console.error('Error uploading payment proof:', error)
-    throw error
+    console.error('Error in uploadPaymentProof:', error)
+    throw error instanceof Error ? error : new Error('Failed to process payment proof')
   }
 }
 

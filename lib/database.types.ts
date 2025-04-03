@@ -181,19 +181,34 @@ export interface Config {
 }
 
 // Database monitoring types
-export interface DbMetrics {
-  totalConnections: number;
-  activeConnections: number;
-  idleConnections: number;
-  waitingQueries: number;
-  lastError?: Error;
-  lastErrorTime?: Date;
-}
-
 export interface PoolState {
   totalCount: number;
   idleCount: number;
   waitingCount: number;
+}
+
+export interface DbMetrics {
+  totalQueries: number;
+  prismaQueries: number;
+  systemQueries: number;
+  slowQueries: number;
+  errors: number;
+  openConnections: number;
+  idleConnections: number;
+  waitingQueries: number;
+  lastError?: Error;
+  lastErrorTime?: Date;
+  prismaMetrics?: Record<string, any>;
+}
+
+export interface DatabaseHealth {
+  status: 'healthy' | 'unhealthy';
+  timestamp: string;
+  postgresConnected: boolean;
+  prismaConnected: boolean;
+  redisConnected: boolean;
+  error?: string;
+  metrics?: DbMetrics;
 }
 
 // Prisma include types for common queries

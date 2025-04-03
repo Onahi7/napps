@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server'
-import { createValidator } from '@/actions/user-actions'
-import { query } from '@/lib/db'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
+import { PrismaClient } from '@prisma/client'
+import { createValidator } from '@/actions/user-actions'
+
+const prisma = new PrismaClient()
 
 export async function GET() {
   try {
@@ -14,18 +16,26 @@ export async function GET() {
       )
     }
 
-    const result = await query(
-      `SELECT p.id, p.full_name as name, p.email, p.phone, p.role,
-              CASE WHEN p.role = 'validator' THEN 'Active' ELSE 'Inactive' END as status,
-              COALESCE((SELECT COUNT(*) FROM scans WHERE scanned_by = p.id), 0) as validations
-       FROM profiles p
-       WHERE p.role = 'validator'
-       ORDER BY p.created_at DESC`
-    )
+    const validators = await prisma.validator.findMany({
+      include: {
+        user: true,
+        scans: true
+      }
+    })
+
+    const formattedValidators = validators.map(validator => ({
+      id: validator.id,
+      name: validator.user.fullName,
+      email: validator.user.email,
+      phone: validator.user.phone,
+      role: validator.user.role,
+      status: validator.user.role === 'VALIDATOR' ? 'Active' : 'Inactive',
+      validations: validator.scans.length
+    }))
 
     return NextResponse.json({
       success: true,
-      validators: result.rows
+      validators: formattedValidators
     })
   } catch (error: any) {
     return NextResponse.json(

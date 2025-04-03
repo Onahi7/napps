@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { revalidatePath } from 'next/cache'
 import { PrismaClient, AccessType } from '@prisma/client'
-import { uploadToCloudinary } from '@/lib/cloudinary-service'
+import { uploadToCloudinary, CloudinaryService } from '@/lib/cloudinary-service'
 
 const prisma = new PrismaClient()
 
@@ -88,6 +88,20 @@ export async function deleteResource(id: string) {
     })
     if (!admin) throw new Error('Not an admin')
 
+    // Get resource URL before deletion
+    const resource = await prisma.resource.findUnique({
+      where: { id }
+    })
+    if (!resource) throw new Error('Resource not found')
+
+    // Delete from Cloudinary first
+    const cloudinary = CloudinaryService.getInstance()
+    const publicId = cloudinary.getPublicIdFromUrl(resource.url)
+    if (publicId) {
+      await cloudinary.deleteFile(publicId)
+    }
+
+    // Then delete from database
     await prisma.resource.delete({
       where: { id }
     })

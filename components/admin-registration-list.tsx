@@ -174,12 +174,16 @@ export function AdminRegistrationList() {
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex flex-col">
-                  <span>{registration.school_name}</span>
-                  <span className="text-sm text-muted-foreground">{registration.school_state}</span>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">{registration.school_name || 'N/A'}</span>
+                  <span className="text-sm text-muted-foreground">{registration.school_state || 'N/A'}</span>
                 </div>
               </TableCell>
-              <TableCell>{registration.napps_chapter}</TableCell>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">{registration.napps_chapter || 'N/A'}</span>
+                </div>
+              </TableCell>
               <TableCell>
                 <div className="space-y-1">
                   <Badge

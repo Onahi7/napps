@@ -36,7 +36,7 @@ export interface ConferenceDetailsResponse {
 export async function getConfig(key: string): Promise<any> {
   try {
     const result = await query(
-      'SELECT value FROM config WHERE key = $1',
+      'SELECT value FROM "Config" WHERE key = $1',
       [key]
     )
     
@@ -59,7 +59,7 @@ export async function getConfigWithRevalidate(key: string) {
   
   // Fetch fresh data
   const result = await query(
-    'SELECT value FROM config WHERE key = $1',
+    'SELECT value FROM "Config" WHERE key = $1',
     [key]
   )
 
@@ -77,7 +77,7 @@ export async function updateConfig(key: string, value: any): Promise<{ success: 
   try {
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
     await query(
-      `INSERT INTO config (key, value) 
+      `INSERT INTO "Config" (key, value) 
        VALUES ($1, $2)
        ON CONFLICT (key) DO UPDATE SET value = $2`,
       [key, stringValue]
@@ -96,7 +96,7 @@ export async function updateConfig(key: string, value: any): Promise<{ success: 
 export async function getRegistrationAmount(): Promise<number> {
   try {
     const result = await query(
-      'SELECT value FROM config WHERE key = $1',
+      'SELECT value FROM "Config" WHERE key = $1',
       ['registrationAmount']
     )
     
@@ -157,7 +157,7 @@ export async function getConferenceConfig() {
   return cache.cached('conference_config', async () => {
     const result = await query(`
       SELECT key, value 
-      FROM config 
+      FROM "Config" 
       WHERE key IN (
         'conference_name',
         'conference_date',
@@ -220,7 +220,7 @@ export async function updateConferenceDetails(details: Partial<ConferenceDetails
 export async function getServerConfig<T>(key: string, defaultValue?: T): Promise<T> {
   try {
     const result = await query(
-      'SELECT value FROM config WHERE key = $1',
+      'SELECT value FROM "Config" WHERE key = $1',
       [key]
     )
 

@@ -55,22 +55,32 @@ const createRedisClient = () => {
     port: parseInt(env.REDIS_PORT || '6379'),
     password: env.REDIS_PASSWORD,
     retryStrategy: (times) => {
-      if (times > 3) {
-        console.warn('Redis connection failed, falling back to in-memory cache')
-        return null // Stop retrying
-      }
       const delay = Math.min(times * 50, 2000)
-      return delay
+      return delay // Keep retrying with increasing delays
     },
-    maxRetriesPerRequest: 3,
-    enableOfflineQueue: false,
-    lazyConnect: true, // Don't connect immediately
+    maxRetriesPerRequest: 5,
+    enableOfflineQueue: true, // Enable offline queue
+    lazyConnect: false, // Connect immediately
+    reconnectOnError: (err) => {
+      const targetError = 'READONLY';
+      if (err.message.includes(targetError)) {
+        // Only reconnect if error includes READONLY
+        return true;
+      }
+      return false;
+    }
   })
 
   client.on('error', (error) => {
-    if (!error.message.includes('ECONNREFUSED')) {
-      console.error('Redis error:', error)
-    }
+    console.error('Redis error:', error)
+  })
+
+  client.on('connect', () => {
+    console.log('Redis connected successfully')
+  })
+
+  client.on('reconnecting', () => {
+    console.log('Redis reconnecting...')
   })
 
   return client
@@ -79,9 +89,23 @@ const createRedisClient = () => {
 export class CacheService {
   private static instance: CacheService
   private redis: Redis | MockRedis
+  private connected: boolean = false
 
   private constructor() {
     this.redis = createRedisClient()
+    this.initializeConnection()
+  }
+
+  private async initializeConnection() {
+    try {
+      if (this.redis instanceof Redis) {
+        await this.redis.ping()
+        this.connected = true
+      }
+    } catch (error) {
+      console.error('Failed to initialize Redis connection:', error)
+      this.connected = false
+    }
   }
 
   static getInstance(): CacheService {
@@ -93,6 +117,9 @@ export class CacheService {
 
   async get<T>(key: string): Promise<T | null> {
     try {
+      if (!this.connected && this.redis instanceof Redis) {
+        await this.initializeConnection()
+      }
       const value = await this.redis.get(key)
       if (!value) return null
       return JSON.parse(value)
@@ -174,6 +201,18 @@ export class CacheService {
       const error = err as Error;
       console.error('Redis ping error:', error.message)
       return false
+    }
+  }
+
+  // Cleanup Redis connection
+  async close(): Promise<void> {
+    try {
+      if (this.redis instanceof Redis) {
+        await this.redis.quit()
+      }
+      this.connected = false
+    } catch (error) {
+      console.error('Error closing Redis connection:', error)
     }
   }
 }
