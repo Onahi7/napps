@@ -4,6 +4,7 @@
       "main": true
     }
   },
+  "buildCommand": "prisma generate && next build",
   "headers": [
     {
       "source": "/(.*)",
