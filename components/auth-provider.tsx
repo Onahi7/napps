@@ -74,9 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (status === 'loading') return;
 
     const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/pre-register'
-    const isPublicRoute = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/offline'
+    // Add /registration-success to the list of public routes
+    const isPublicRoute = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/offline' || pathname === '/registration-success'
 
     if (status === 'unauthenticated') {
+      // Only redirect if it's NOT an auth route AND NOT a public route
       if (!isAuthRoute && !isPublicRoute) {
         const callbackUrl = pathname ? encodeURIComponent(pathname) : ''
         router.push(`/login?callbackUrl=${callbackUrl}`)

@@ -184,7 +184,7 @@ export function ParticipantDashboard() {
           </Badge>
         </CardContent>
         <CardFooter>
-          <Button asChild className="w-full" variant="gold">
+          <Button asChild className="w-full font-bold" variant="gold">
             <Link href="/participant/accreditation">
               {status.accreditation === "COMPLETED" ? "View Details" : "Get Accredited"}
             </Link>
@@ -210,7 +210,7 @@ export function ParticipantDashboard() {
           </Badge>
         </CardContent>
         <CardFooter>
-          <Button asChild className="w-full" variant="gold">
+          <Button asChild className="w-full font-bold" variant="gold">
             <Link href="/participant/accommodation">
               {status.accommodation === "CHECKED_IN"
                 ? "View Details"
